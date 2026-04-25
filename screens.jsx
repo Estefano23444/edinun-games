@@ -1,0 +1,512 @@
+// screens.jsx — Todas las pantallas del prototipo EDINUN GAMES.
+// Importa (globalmente) CHARACTERS, personajes, EdinunLogo, EdinunLogoMini.
+
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ─────────────────────────────────────────────────────────────
+// Fondo cósmico + glifos matemáticos flotantes (se reusa en todas las
+// pantallas excepto la del aula en pizarra).
+// ─────────────────────────────────────────────────────────────
+function CosmosBg({ variant = "cosmic" }) {
+  // Tamaños relativos (em) a la base CSS clamp(48px, 7vmin, 110px) para que
+  // los glifos escalen con el viewport y se vean iguales en cualquier dispositivo.
+  if (variant === "chalkboard") {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(ellipse at center, #3a9b7a 0%, #1d6b53 55%, #0b3a2d 100%)",
+          overflow: "hidden",
+        }}
+      >
+        <div className="ed-glyphs" style={{ color: "rgba(255,255,255,0.10)" }}>
+          <span style={{ left: "6%", top: "12%", "--rot": "-8deg" }}>√</span>
+          <span style={{ left: "82%", top: "16%", "--rot": "6deg", fontSize: "0.62em" }}>π</span>
+          <span style={{ left: "10%", top: "78%", "--rot": "12deg", fontSize: "0.7em" }}>∞</span>
+          <span style={{ left: "88%", top: "72%", "--rot": "-10deg", fontSize: "0.55em" }}>÷</span>
+          <span style={{ left: "45%", top: "8%", "--rot": "4deg", fontSize: "0.5em" }}>∑</span>
+          <span style={{ left: "3%", top: "45%", "--rot": "-4deg", fontSize: "0.6em" }}>x²</span>
+          <span style={{ left: "92%", top: "45%", "--rot": "8deg", fontSize: "0.58em" }}>½</span>
+          <span style={{ left: "30%", top: "55%", "--rot": "-6deg", fontSize: "0.5em" }}>+</span>
+          <span style={{ left: "70%", top: "62%", "--rot": "8deg", fontSize: "0.52em" }}>×</span>
+          <span style={{ left: "55%", top: "30%", "--rot": "-4deg", fontSize: "0.46em" }}>=</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="ed-cosmos" />
+      <div className="ed-glyphs">
+        <span style={{ left: "5%", top: "10%", "--rot": "-8deg" }}>x²</span>
+        <span style={{ left: "84%", top: "6%", "--rot": "6deg", fontSize: "0.78em" }}>π</span>
+        <span style={{ left: "92%", top: "72%", "--rot": "-12deg", fontSize: "0.74em" }}>√</span>
+        <span style={{ left: "3%", top: "82%", "--rot": "12deg", fontSize: "0.91em" }}>∑</span>
+        <span style={{ left: "46%", top: "4%", "--rot": "-4deg", fontSize: "0.59em" }}>∞</span>
+        <span style={{ left: "7%", top: "46%", "--rot": "-4deg", fontSize: "0.67em" }}>½</span>
+        <span style={{ left: "88%", top: "40%", "--rot": "8deg", fontSize: "0.65em" }}>÷</span>
+        <span style={{ left: "22%", top: "22%", "--rot": "10deg", fontSize: "0.52em" }}>+</span>
+        <span style={{ left: "70%", top: "24%", "--rot": "-6deg", fontSize: "0.57em" }}>−</span>
+        <span style={{ left: "32%", top: "70%", "--rot": "8deg", fontSize: "0.61em" }}>×</span>
+        <span style={{ left: "62%", top: "78%", "--rot": "-10deg", fontSize: "0.63em" }}>=</span>
+        <span style={{ left: "18%", top: "58%", "--rot": "14deg", fontSize: "0.48em" }}>7</span>
+        <span style={{ left: "78%", top: "56%", "--rot": "-8deg", fontSize: "0.52em" }}>3</span>
+        <span style={{ left: "50%", top: "88%", "--rot": "4deg", fontSize: "0.5em" }}>△</span>
+        <span style={{ left: "40%", top: "38%", "--rot": "-6deg", fontSize: "0.54em" }}>%</span>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Visitor ticker — valor persistente en localStorage que se incrementa
+// al entrar. Útil para dar sensación de "contador público" sin backend.
+// ─────────────────────────────────────────────────────────────
+// Contador de partidas completadas (persistente en localStorage).
+// Se incrementa al terminar cada juego. Pensado para servidores estáticos
+// sin backend — sólo HTML + localStorage del navegador.
+// Contador de VISITANTES ─────────────────────────────────────
+// Suma +1 una sola vez por pestaña/sesión usando sessionStorage
+// como guarda; el total vive en localStorage y es compartido entre visitas.
+// Pensado para servidores estáticos sin backend.
+function useVisitorCount() {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const KEY = "edinun_visitors_v1";
+    const SESSION_KEY = "edinun_visit_counted_v1";
+    let current = parseInt(localStorage.getItem(KEY) || "0", 10);
+    if (isNaN(current)) current = 0;
+    if (!sessionStorage.getItem(SESSION_KEY)) {
+      current += 1;
+      localStorage.setItem(KEY, String(current));
+      sessionStorage.setItem(SESSION_KEY, "1");
+    }
+    setN(current);
+  }, []);
+  return n;
+}
+
+function incrementGamesCompleted() {
+  const KEY = "edinun_games_completed_v1";
+  const raw = localStorage.getItem(KEY);
+  const next = (raw ? parseInt(raw, 10) : 0) + 1;
+  localStorage.setItem(KEY, String(next));
+  window.dispatchEvent(new Event("edinun:games-updated"));
+  return next;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 1. PANTALLA DE INICIO — nombre + selección rápida de nivel
+// ─────────────────────────────────────────────────────────────
+function HomeScreen({ app, setApp, go }) {
+  const visitors = useVisitorCount();
+  const [name, setName] = useState(app.studentName || "");
+  const [level, setLevel] = useState(app.level || "basic");
+
+  function start() {
+    if (!name.trim()) return;
+    setApp((s) => ({
+      ...s,
+      studentName: name.trim(),
+      level,
+      sessionStart: Date.now(),
+    }));
+    go("character");
+  }
+
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+
+
+      {/* Contador de visitantes (arriba izquierda) */}
+      <div
+        style={{
+          position: "absolute",
+          top: 22,
+          left: 24,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          background: "rgba(10,6,35,0.65)",
+          border: "1px solid rgba(242,194,96,0.35)",
+          borderRadius: 999,
+          padding: "8px 14px",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        <div
+          style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: "#2ecc8f",
+            boxShadow: "0 0 8px #2ecc8f",
+            animation: "ed-pulse-glow 2s infinite",
+          }}
+        />
+        <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 12, color: "#f2c260", letterSpacing: "0.08em" }}>
+          <span style={{ color: "rgba(246,241,255,0.6)" }}>VISITANTES · </span>
+          {visitors.toLocaleString("es-CO")}
+        </div>
+      </div>
+
+      {/* Contenido principal */}
+      <div
+        style={{
+          position: "absolute", inset: 0,
+          display: "grid",
+          gridTemplateColumns: "1fr 1.15fr",
+          alignItems: "center",
+          padding: "40px 56px",
+          gap: 40,
+        }}
+      >
+        {/* Columna izquierda — logo protagonista */}
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <EdinunLogo size={300} />
+        </div>
+
+        {/* Columna derecha — entrada + niveles */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 22, maxWidth: 520 }}>
+          <div>
+            <div className="ed-label" style={{ color: "#4fd8ff", marginBottom: 8 }}>
+              EDINUN · Juegos de matemáticas
+            </div>
+            <h1 className="ed-h1" style={{ fontSize: 44, lineHeight: 1.05 }}>
+              ¡Bienvenido/a,{" "}
+              <span style={{
+                background: "linear-gradient(180deg,#fce9a8,#d9a441)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                fontWeight: 600,
+              }}>
+                Estudiante!
+              </span>
+            </h1>
+            <p className="ed-body" style={{ marginTop: 8, fontSize: 15 }}>
+              Antes de empezar, dinos cómo te llamas para guardar tu progreso y resultados.
+            </p>
+          </div>
+
+          {/* Input nombre */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ flex: 1, position: "relative" }}>
+              <input
+                className="ed-input"
+                placeholder="Escribe tu nombre"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && start()}
+              />
+            </div>
+            <button className="ed-btn ed-btn-primary" onClick={start} disabled={!name.trim()}
+              style={{ height: 52, padding: "0 28px", fontSize: 16, opacity: name.trim() ? 1 : 0.5 }}>
+              ENTRAR →
+            </button>
+          </div>
+
+          {/* Selección de nivel */}
+          <div>
+            <div className="ed-label" style={{ marginBottom: 10 }}>
+              Selecciona un nivel para jugar
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {[
+                { id: "basic", label: "Básico", hint: "+  −", chip: "ed-chip-basic" },
+                { id: "medium", label: "Medio", hint: "×", chip: "ed-chip-medium" },
+                { id: "advanced", label: "Avanzado", hint: "÷", chip: "ed-chip-advanced" },
+              ].map((lv) => (
+                <button
+                  key={lv.id}
+                  onClick={() => setLevel(lv.id)}
+                  style={{
+                    padding: "14px 10px",
+                    borderRadius: 18,
+                    background: level === lv.id
+                      ? "linear-gradient(180deg, rgba(79,216,255,0.25), rgba(106,61,214,0.35))"
+                      : "rgba(18,10,55,0.55)",
+                    boxShadow: level === lv.id
+                      ? "inset 0 0 0 2px rgba(79,216,255,0.8), 0 0 24px rgba(79,216,255,0.35)"
+                      : "inset 0 0 0 1px rgba(148,120,255,0.3)",
+                    transition: "all 0.2s ease",
+                    textAlign: "center",
+                    color: "#fff",
+                  }}
+                >
+                  <div className={`ed-chip ${lv.chip}`} style={{ marginBottom: 8 }}>
+                    {lv.label}
+                  </div>
+                  <div style={{ fontFamily: "var(--ed-font-display)", fontSize: 18, letterSpacing: "0.12em" }}>
+                    {lv.hint}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 2. SELECCIÓN DE PERSONAJE
+// ─────────────────────────────────────────────────────────────
+function CharacterScreen({ app, setApp, go }) {
+  const [sel, setSel] = useState(app.character || "mago");
+  const current = CHARACTERS.find((c) => c.id === sel) || CHARACTERS[0];
+
+  function choose() {
+    // Derivar la categoría desde el nivel elegido en Home:
+    //   básico  → aleatorio entre suma y resta
+    //   medio   → multiplicación
+    //   avanzado→ división
+    const level = app.level || "basic";
+    let catId = "suma", catLabel = "Sumas";
+    if (level === "basic") {
+      const pick = Math.random() < 0.5 ? ["suma", "Sumas"] : ["resta", "Restas"];
+      catId = pick[0]; catLabel = pick[1];
+    } else if (level === "medium") {
+      catId = "mult"; catLabel = "Multiplicaciones";
+    } else if (level === "advanced") {
+      catId = "div"; catLabel = "Divisiones";
+    }
+    setApp((s) => ({
+      ...s,
+      character: sel,
+      currentCategory: catId,
+      currentCatLabel: catLabel,
+    }));
+    go("game");
+  }
+
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+
+
+      {/* Header */}
+      <div style={{ position: "absolute", top: 20, left: 24, right: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>
+          ← Volver
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <EdinunLogoMini size={36} />
+          <div>
+            <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, color: "#f2c260" }}>
+              Hola, {app.studentName || "Estudiante"} 👋
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contenido */}
+      <div style={{
+        position: "absolute", inset: "68px 32px 24px 32px",
+        display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 24, alignItems: "center",
+      }}>
+        {/* Columna izquierda — personaje seleccionado */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0 }}>
+          <div style={{ position: "relative" }}>
+            {/* plataforma */}
+            <div style={{
+              position: "absolute", bottom: 4, left: "50%", transform: "translateX(-50%)",
+              width: 180, height: 24, borderRadius: "50%",
+              background: "radial-gradient(ellipse, rgba(242,194,96,0.4), transparent 70%)",
+              filter: "blur(4px)",
+            }} />
+            <current.Component size={210} />
+          </div>
+          <div style={{ textAlign: "center", marginTop: 2 }}>
+            <h2 className="ed-h1" style={{ fontSize: 26, lineHeight: 1 }}>{current.name}</h2>
+            <div className="ed-label" style={{ color: "#fce9a8", marginTop: 2, fontSize: 10 }}>{current.title}</div>
+            <div className="ed-body" style={{ marginTop: 6, maxWidth: 300, fontStyle: "italic", fontSize: 12, lineHeight: 1.35 }}>
+              "{current.quote}"
+            </div>
+          </div>
+        </div>
+
+        {/* Columna derecha — grid seleccionable */}
+        <div>
+          <div className="ed-label" style={{ marginBottom: 10 }}>Elige tu guía matemático</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {CHARACTERS.map((c) => {
+              const active = sel === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setSel(c.id)}
+                  className="ed-card"
+                  style={{
+                    padding: 12,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transform: active ? "translateY(-2px)" : "none",
+                    boxShadow: active
+                      ? "var(--ed-shadow-card), 0 0 0 2px rgba(79,216,255,0.7), 0 0 30px rgba(79,216,255,0.35)"
+                      : "var(--ed-shadow-card)",
+                    transition: "all 0.18s ease",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 68, height: 68, flexShrink: 0 }}>
+                      <c.Component size={68} floating={false} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 18 }}>
+                        {c.name}
+                      </div>
+                      <div className="ed-label" style={{ fontSize: 10, color: "#4fd8ff" }}>
+                        {c.specialty}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={choose}
+            className="ed-btn ed-btn-primary"
+            style={{ marginTop: 20, width: "100%", height: 52, fontSize: 17 }}
+          >
+            ¡VAMOS, {current.name.toUpperCase()}! →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3. MENÚ DE CATEGORÍAS
+// ─────────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { id: "suma", name: "Sumas", level: "basic", emoji: "+", tone: "#f5a623", prog: 0.8, locked: false },
+  { id: "resta", name: "Restas", level: "basic", emoji: "−", tone: "#ff8a5c", prog: 0.55, locked: false },
+  { id: "mult", name: "Multiplicación", level: "medium", emoji: "×", tone: "#f5d84b", prog: 0.3, locked: false },
+  { id: "div", name: "División", level: "medium", emoji: "÷", tone: "#b3e65e", prog: 0.1, locked: false },
+  { id: "frac", name: "Fracciones", level: "medium", emoji: "½", tone: "#7bf5c4", prog: 0, locked: false },
+  { id: "geom", name: "Geometría", level: "advanced", emoji: "△", tone: "#4fd8ff", prog: 0, locked: true },
+  { id: "alge", name: "Álgebra", level: "advanced", emoji: "x²", tone: "#8a5af2", prog: 0, locked: true },
+  { id: "logic", name: "Lógica", level: "advanced", emoji: "∞", tone: "#ff5fb3", prog: 0, locked: true },
+];
+
+function MenuScreen({ app, setApp, go }) {
+  const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
+
+  function play(cat) {
+    if (cat.locked) return;
+    setApp((s) => ({ ...s, currentCategory: cat.id, currentCatLabel: cat.name }));
+    go("game");
+  }
+
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+
+
+      {/* Header */}
+      <div style={{ position: "absolute", top: 16, left: 24, right: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <button className="ed-btn ed-btn-ghost" onClick={() => go("character")} style={{ padding: "8px 14px" }}>← Volver</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <EdinunLogoMini size={34} />
+          <span style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, color: "#f2c260" }}>EDINUN</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(10,6,35,0.7)", padding: "6px 12px", borderRadius: 999, border: "1px solid rgba(242,194,96,0.35)" }}>
+            <span style={{ fontSize: 16 }}>⭐</span>
+            <span style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600 }}>{app.stars || 48}</span>
+          </div>
+          <button onClick={() => go("profile")} style={{ padding: 0, borderRadius: "50%" }}>
+            <CharacterAvatar char={app.character} size={40} />
+          </button>
+        </div>
+      </div>
+
+      {/* Título */}
+      <div style={{ position: "absolute", top: 74, left: 40, right: 40 }}>
+        <h1 className="ed-h1" style={{ fontSize: 32 }}>
+          ¡Hola, <span style={{ color: "#fce9a8" }}>{app.studentName}</span>!{" "}
+          <span style={{ fontSize: 22, fontWeight: 400, color: "var(--ed-ink-dim)" }}>
+            — Elige una aventura con {char.name}
+          </span>
+        </h1>
+      </div>
+
+      {/* Grid de categorías — 4x2 */}
+      <div style={{
+        position: "absolute",
+        top: 130, left: 40, right: 40, bottom: 32,
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateRows: "1fr 1fr",
+        gap: 14,
+      }}>
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => play(cat)}
+            className="ed-card"
+            style={{
+              padding: "14px 14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              cursor: cat.locked ? "not-allowed" : "pointer",
+              opacity: cat.locked ? 0.55 : 1,
+              position: "relative",
+              overflow: "hidden",
+              transition: "transform 0.15s ease, box-shadow 0.15s ease",
+            }}
+            onMouseEnter={(e) => !cat.locked && (e.currentTarget.style.transform = "translateY(-3px)")}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = "none")}
+          >
+            {/* halo tono */}
+            <div style={{
+              position: "absolute", inset: -20,
+              background: `radial-gradient(circle at 30% 0%, ${cat.tone}44, transparent 55%)`,
+              pointerEvents: "none",
+            }} />
+            <div style={{ position: "relative", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div className={`ed-chip ed-chip-${cat.level}`} style={{ fontSize: 10, padding: "2px 8px" }}>
+                {cat.level === "basic" ? "Básico" : cat.level === "medium" ? "Medio" : "Avanzado"}
+              </div>
+              {cat.locked && <div style={{ fontSize: 18 }}>🔒</div>}
+            </div>
+            <div style={{
+              position: "relative",
+              fontFamily: "var(--ed-font-display)",
+              fontWeight: 600,
+              fontSize: 58,
+              lineHeight: 1,
+              color: cat.tone,
+              textShadow: `0 0 20px ${cat.tone}66, 0 3px 0 rgba(0,0,0,0.3)`,
+              textAlign: "center",
+              margin: "8px 0",
+            }}>
+              {cat.emoji}
+            </div>
+            <div style={{ position: "relative" }}>
+              <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+                {cat.name}
+              </div>
+              <div style={{ height: 5, background: "rgba(255,255,255,0.12)", borderRadius: 999, overflow: "hidden" }}>
+                <div style={{
+                  width: `${Math.round(cat.prog * 100)}%`,
+                  height: "100%",
+                  background: `linear-gradient(90deg, ${cat.tone}, #fff)`,
+                }} />
+              </div>
+              <div className="ed-label" style={{ fontSize: 10, marginTop: 4, color: "rgba(246,241,255,0.55)" }}>
+                {cat.locked ? "Pensum superior" : `${Math.round(cat.prog * 100)}% completado`}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { HomeScreen, CharacterScreen, MenuScreen, CosmosBg, CATEGORIES, incrementGamesCompleted });
