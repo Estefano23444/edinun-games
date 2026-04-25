@@ -6,6 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 EDINUN GAMES — juegos de matemáticas para estudiantes. Originado como prototipo handoff de Claude Design (claude.ai/design); el objetivo actual es llevarlo a producción soportando móvil, tablet y desktop. En móvil el diseño es horizontal pero el dispositivo se sostiene **vertical**: el usuario gira físicamente el teléfono para verlo bien (el contenido NO rota junto con la orientación del sistema).
 
+Bitácora del proyecto y decisiones tomadas: ver `MEMORY.md`.
+
+## Documentación de cambios importantes
+
+Toda decisión de arquitectura, plan de implementación, o nota técnica relevante se documenta como archivo markdown dentro de la carpeta `.planning/` en la raíz del repo.
+
+- **Un archivo por tema** (ej. `.planning/responsive-strategy.md`, `.planning/print-report.md`).
+- **Cada archivo debe tener menos de 200 líneas.** Si un tema crece más, divídelo en sub-documentos enlazados.
+- Crear la carpeta si no existe. No es necesario un índice — los nombres de archivo deben ser descriptivos.
+- Cambios triviales (renombrados, fixes de copy, ajustes menores de estilo) **no** requieren entrada en `.planning/`. Reservado para decisiones que un futuro mantenedor necesitaría entender para no romper invariantes.
+
 ## Running / deploying
 
 No build system, no package manager. Es HTML estático que carga React 18 + Babel Standalone desde unpkg. Pensado para servidores estáticos triviales (GitHub Pages, Netlify, S3, `python -m http.server`).
