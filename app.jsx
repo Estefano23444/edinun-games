@@ -1,73 +1,91 @@
 // app.jsx — Shell de producción EDINUN GAMES.
 // Enrutador por estado y device stage adaptativo (desktop / tablet / mobile).
-// Móvil portrait: el contenido NUNCA rota; queda letterboxed y obliga al
-// usuario a rotar físicamente el teléfono.
+// Móvil portrait: el contenido NUNCA rota; un overlay BLOQUEANTE obliga
+// al usuario a girar físicamente el teléfono antes de poder usar la app.
 
 const { useState: useStateA, useEffect: useEffectA } = React;
+
+// ─────────────────────────────────────────────────────────────
+// useViewportSize — devuelve el tamaño REAL visible del viewport.
+//
+// En iOS Safari (y otros mobile browsers), `window.innerHeight` y `100vh`
+// reportan la altura de la ventana INCLUYENDO la URL bar, así que el
+// contenido escalado a esa altura termina parcialmente fuera de pantalla
+// (ej: el numpad del juego queda debajo del fondo visible). La Visual
+// Viewport API reporta el área verdaderamente visible y se actualiza
+// cuando la URL bar se muestra/oculta.
+// ─────────────────────────────────────────────────────────────
+function useViewportSize() {
+  const [size, setSize] = useStateA(() => readSize());
+  useEffectA(() => {
+    function onChange() { setSize(readSize()); }
+    window.addEventListener("resize", onChange);
+    window.addEventListener("orientationchange", onChange);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", onChange);
+      window.visualViewport.addEventListener("scroll", onChange);
+    }
+    return () => {
+      window.removeEventListener("resize", onChange);
+      window.removeEventListener("orientationchange", onChange);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", onChange);
+        window.visualViewport.removeEventListener("scroll", onChange);
+      }
+    };
+  }, []);
+  return size;
+}
+function readSize() {
+  const vv = (typeof window !== "undefined") ? window.visualViewport : null;
+  const vw = vv ? vv.width : window.innerWidth;
+  const vh = vv ? vv.height : window.innerHeight;
+  return { vw, vh };
+}
 
 // ─────────────────────────────────────────────────────────────
 // DeviceStage — escala el lienzo lógico 900×540 (paisaje) al viewport.
 //
 // Reglas:
-//   · Desktop / tablet: marco redondeado + notch decorativo, padding cómodo.
-//   · Mobile (cualquier orientación): sin marco, sin notch, padding mínimo.
-//   · Mobile portrait: scale es pequeño y se ve "horizontal apretado".
-//     Eso es intencional — el usuario debe girar el teléfono. Mostramos un
-//     hint discreto, no bloqueante.
+//   · Desktop / tablet: sin marco, sin notch, fondo cósmico edge-to-edge.
+//   · Mobile portrait: lienzo letterboxed Y overlay BLOQUEANTE "Gira el
+//     teléfono". El contenido del juego no es accesible hasta que rote.
+//   · Mobile landscape: lienzo escalado al viewport visible (visualViewport,
+//     no innerHeight, para no clippearse debajo de la URL bar de iOS).
 // ─────────────────────────────────────────────────────────────
 function DeviceStage({ children, variant = "cosmic" }) {
   const W = 900, H = 540;
-  const [scale, setScale] = useStateA(1);
-  const [mode, setMode] = useStateA("desktop");
-  const [portrait, setPortrait] = useStateA(false);
+  const { vw, vh } = useViewportSize();
+  const minSide = Math.min(vw, vh);
+  const maxSide = Math.max(vw, vh);
+  let mode = "desktop";
+  if (maxSide < 820) mode = "mobile";
+  else if (minSide < 820) mode = "tablet";
+  const portrait = vh > vw;
+  const scale = Math.max(Math.min(vw / W, vh / H), 0.15);
 
-  useEffectA(() => {
-    function onResize() {
-      const vw = window.innerWidth, vh = window.innerHeight;
-      const minSide = Math.min(vw, vh);
-      const maxSide = Math.max(vw, vh);
-
-      let m = "desktop";
-      if (maxSide < 820) m = "mobile";
-      else if (minSide < 820) m = "tablet";
-
-      const isPortrait = vh > vw;
-      setMode(m);
-      setPortrait(isPortrait);
-
-      const s = Math.min(vw / W, vh / H);
-      setScale(Math.max(s, 0.15));
-    }
-    onResize();
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-    };
-  }, []);
-
-  const showRotateHint = mode === "mobile" && portrait;
+  // Detección de teléfono independiente del modo: cualquier dispositivo con
+  // lado menor ≤ 500 CSS-px es un teléfono (incluye Pro Max, Plus, Pixel XL,
+  // etc.). Tablets en portrait (iPad ~768 ancho) NO entran — son usables
+  // letterboxed. Solo se bloquea rotación cuando es teléfono Y está en
+  // portrait — el lienzo paisaje queda tan chico que no se puede jugar.
+  const isPhone = minSide <= 500;
+  const lockPortrait = isPhone && portrait;
 
   return (
     <div style={{
-      width: "100vw", height: "100vh",
+      width: "100vw", height: "100dvh",
+      minHeight: "-webkit-fill-available",
       overflow: "hidden",
       position: "fixed", inset: 0,
       background: variant === "chalkboard" ? "#0b3a2d" : "#050214",
     }}>
-      {/* Fondo cósmico/pizarra al viewport completo — los glifos matemáticos
-          flotan sobre toda la pantalla y se ven uniformes en cualquier resolución. */}
       <CosmosBg variant={variant} />
 
       {/* Lienzo lógico 900×540 centrado y escalado.
           Posicionamos absoluto con left/top 50% + translate(-50%, -50%) ANTES
-          de la escala, para que el centro visual del lienzo coincida con el
-          centro del viewport sin importar la relación entre tamaños.
-          (Con display:grid + placeItems:center, las pistas auto-dimensionan
-          al contenido y, cuando el lienzo > viewport, quedaba alineado a la
-          esquina superior izquierda — el bug se notaba dramáticamente en
-          mobile portrait.) */}
+          de la escala, para que el centro visual coincida con el centro
+          del viewport sin importar la relación entre tamaños. */}
       <div style={{
         width: W, height: H,
         position: "absolute",
@@ -79,42 +97,74 @@ function DeviceStage({ children, variant = "cosmic" }) {
         {children}
       </div>
 
-      {showRotateHint && <RotateHint />}
+      {lockPortrait && <RotateLockOverlay />}
     </div>
   );
 }
 
-// Hint discreto de rotación — no bloquea el contenido, solo sugiere girar.
-// Aparece solo en móvil portrait. Se puede ocultar tocándolo.
-function RotateHint() {
-  const [hidden, setHidden] = useStateA(false);
-  if (hidden) return null;
+// Overlay bloqueante de rotación. En mobile portrait cubre toda la pantalla
+// con un mensaje claro y un ícono animado. NO se puede descartar — el usuario
+// DEBE girar el dispositivo para acceder al juego. Se desmonta solo cuando
+// el viewport pasa a landscape.
+function RotateLockOverlay() {
   return (
-    <button
-      onClick={() => setHidden(true)}
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Gira tu teléfono para jugar"
       style={{
-        position: "fixed", left: "50%", bottom: 14, transform: "translateX(-50%)",
-        zIndex: 9999,
-        display: "flex", alignItems: "center", gap: 8,
-        background: "rgba(10,6,35,0.85)",
-        border: "1px solid rgba(242,194,96,0.4)",
-        borderRadius: 999, padding: "8px 14px",
+        position: "fixed", inset: 0, zIndex: 99999,
+        background: "linear-gradient(180deg,#050214 0%,#0a0628 100%)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        textAlign: "center", padding: "32px 24px",
         color: "#fce9a8",
-        fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 13,
-        backdropFilter: "blur(8px)",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.45)",
+        fontFamily: "var(--ed-font-display, system-ui)",
       }}
-      aria-label="Gira tu dispositivo para ver mejor"
     >
-      <span style={{ display: "inline-block", animation: "ed-rotate-hint 2.4s ease-in-out infinite" }}>↻</span>
-      Gira tu dispositivo
+      <div
+        style={{
+          width: 132, height: 132, marginBottom: 28,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          animation: "ed-rotate-lock 2.4s ease-in-out infinite",
+        }}
+        aria-hidden="true"
+      >
+        {/* Ícono de teléfono que rota */}
+        <svg viewBox="0 0 100 100" width="120" height="120" fill="none">
+          <rect x="36" y="14" width="28" height="72" rx="6"
+                stroke="#f2c260" strokeWidth="3" fill="rgba(242,194,96,0.08)" />
+          <rect x="42" y="22" width="16" height="48" rx="2" fill="rgba(242,194,96,0.18)" />
+          <circle cx="50" cy="78" r="2.5" fill="#f2c260" />
+        </svg>
+      </div>
+      <div style={{
+        fontWeight: 800,
+        fontSize: "clamp(18px, 5.2vw, 26px)",
+        lineHeight: 1.15,
+        textTransform: "uppercase", letterSpacing: "0.02em",
+        marginBottom: 12,
+      }}>
+        Gira tu teléfono
+      </div>
+      <div style={{
+        fontWeight: 500,
+        fontSize: "clamp(13px, 4vw, 16px)",
+        lineHeight: 1.4,
+        color: "rgba(252,233,168,0.78)",
+        maxWidth: "min(320px, 80vw)",
+      }}>
+        Pon tu teléfono de lado para jugar.
+      </div>
       <style>{`
-        @keyframes ed-rotate-hint {
-          0%, 100% { transform: rotate(0deg); }
-          50% { transform: rotate(90deg); }
+        @keyframes ed-rotate-lock {
+          0%   { transform: rotate(0deg); }
+          45%  { transform: rotate(0deg); }
+          70%  { transform: rotate(-90deg); }
+          100% { transform: rotate(-90deg); }
         }
       `}</style>
-    </button>
+    </div>
   );
 }
 
