@@ -461,67 +461,37 @@ body {
 
 /* ============================================================
    IMPRESIÓN DE REPORTE
-   Solo imprime el panel de resultados, sin fondo cósmico.
-   Hay que resetear el transform: scale() del DeviceStage para que el
-   reporte ocupe toda la página A4 (sin esto el reporte sale recortado
-   y minúsculo, como en el bug del primer release).
+   Estrategia: el documento imprimible (.ed-print-doc) vive como hermano
+   de #root en <body> via Portal. En pantalla está oculto. En print:
+     - #root se oculta entero (con todo el lienzo escalado del DeviceStage)
+     - .ed-print-doc se muestra y fluye natural en A4
+   No usamos `position: fixed`, `visibility: hidden` ni truquitos con
+   transforms — todo eso se rompe en iOS Safari/Chrome durante el print
+   y produce PDFs en blanco. El toggle display:none ↔ display:block es
+   universalmente confiable.
    ============================================================ */
+.ed-print-doc { display: none; }
+
 @media print {
   @page { size: A4 portrait; margin: 14mm; }
   html, body {
     background: #fff !important;
     color: #111 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     overflow: visible !important;
     height: auto !important;
     width: auto !important;
   }
-  /* Anular el lienzo escalado del DeviceStage y todos sus contenedores
-     para que .ed-print-area pueda fluir a tamaño A4. */
-  body *, body *::before, body *::after {
-    visibility: hidden;
-    transform: none !important;
-    animation: none !important;
-    overflow: visible !important;
-  }
-  .ed-print-area, .ed-print-area * { visibility: visible; }
-  .ed-print-area {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    background: #fff !important;
-    color: #111 !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+  /* Esconder TODO el árbol del juego — #root es hijo directo de body. */
+  body > #root { display: none !important; }
+  /* Mostrar el documento imprimible. */
+  body > .ed-print-doc {
     display: block !important;
-    overflow: visible !important;
-    font-family: 'Nunito', system-ui, sans-serif !important;
+    color: #111;
+    background: #fff;
+    font-family: 'Nunito', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 11pt;
+    line-height: 1.4;
   }
-  .ed-print-area * {
-    background: transparent !important;
-    color: #111 !important;
-    border-color: #555 !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-    -webkit-text-fill-color: #111 !important;
-  }
-  .ed-print-area table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-  }
-  .ed-print-area thead tr {
-    border-bottom: 2px solid #111 !important;
-  }
-  .ed-print-area tbody tr {
-    border-bottom: 1px solid #aaa !important;
-  }
-  .ed-print-area img {
-    filter: none !important;
-  }
-  .ed-print-hide { display: none !important; }
-  .ed-print-only { display: block !important; }
 }
-.ed-print-only { display: none; }

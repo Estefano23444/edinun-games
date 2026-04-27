@@ -741,135 +741,134 @@ function formatOp(e) {
   return `${e.a} ${e.op} ${e.b}`;
 }
 
-// printReport — abre una ventana nueva con HTML limpio (sin DeviceStage,
-// sin transform:scale, sin position:fixed) y dispara window.print() ahí.
-//
-// Por qué: el approach anterior usaba @media print + visibility:hidden + un
-// inset:0 sobre .ed-print-area dentro del lienzo escalado. En iOS Safari
-// (y otros navegadores móviles) esa combinación produce PDFs en blanco
-// porque el motor de print intenta resolver el transform:scale del padre
-// y se rinde. Una ventana nueva con DOM aislado evita el problema.
-function printReport({ studentName, res, dateStr, m, s, attemptedCount, totalEx, accuracy }) {
-  const rows = (res.log || []).map((e) => `
-    <tr>
-      <td class="num">${e.idx}</td>
-      <td class="op">${e.a} ${e.op} ${e.b}</td>
-      <td class="r">${e.userAnswer}</td>
-      <td class="r">${e.correctAnswer}</td>
-      <td class="c ${e.isCorrect ? "ok" : "err"}">${e.isCorrect ? "Correcto" : "Incorrecto"}</td>
-      <td class="r dim">${e.time}s</td>
-    </tr>
-  `).join("");
-  const emptyRow = (res.log || []).length === 0
-    ? `<tr><td colspan="6" class="empty">No se registraron ejercicios en esta sesión.</td></tr>`
-    : "";
+// PrintableReport — versión imprimible del reporte académico, montada como
+// hermana de #root en <body> via Portal. En pantalla queda oculta
+// (`.ed-print-doc { display: none }` en CSS). En @media print se muestra y
+// #root se oculta. Esto evita los PDFs en blanco que se daban en iOS al
+// usar position:fixed dentro del lienzo escalado del DeviceStage o al
+// abrir popups (window.open) que iOS bloquea o no rendea bien para print.
+const printStyles = {
+  doc: { padding: 0, margin: 0, color: "#111", background: "#fff" },
+  head: {
+    display: "flex", alignItems: "center", gap: 14,
+    borderBottom: "2px solid #d9a441",
+    paddingBottom: 10, marginBottom: 14,
+  },
+  logo: { width: 56, height: 56, objectFit: "contain" },
+  title: { flex: 1, minWidth: 0 },
+  org: { fontFamily: "'Fredoka','Baloo 2','Nunito',sans-serif", fontWeight: 700, fontSize: "16pt", letterSpacing: "0.03em", lineHeight: 1.1, margin: 0 },
+  sub: { fontSize: "9pt", color: "#555", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 },
+  date: { fontFamily: "ui-monospace,Consolas,monospace", fontSize: "10pt", color: "#555", textAlign: "right", whiteSpace: "nowrap" },
+  fields: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 },
+  field: { padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd" },
+  fieldL: { fontSize: "8pt", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666" },
+  fieldV: { fontSize: "12pt", fontWeight: 700, marginTop: 2 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: "11pt" },
+  thHead: { borderBottom: "2px solid #111" },
+  th: { padding: 8, textAlign: "left", fontSize: "9pt", textTransform: "uppercase", letterSpacing: "0.08em", color: "#555", fontWeight: 700 },
+  thR: { textAlign: "right" },
+  thC: { textAlign: "center" },
+  tr: { borderBottom: "1px solid #ccc" },
+  td: { padding: "9px 8px", fontFamily: "ui-monospace,Consolas,monospace" },
+  tdNum: { color: "#888", width: 36 },
+  tdOp: { fontWeight: 700 },
+  tdR: { textAlign: "right" },
+  tdC: { textAlign: "center", fontFamily: "'Nunito',sans-serif", fontWeight: 700 },
+  tdDim: { color: "#888" },
+  tdOk: { color: "#1e8a5d" },
+  tdErr: { color: "#c33b3b" },
+  tdEmpty: { padding: 24, textAlign: "center", color: "#888", fontStyle: "italic" },
+  summary: { marginTop: 16, borderTop: "2px solid #d9a441", paddingTop: 12,
+    display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 },
+  cell: { padding: 10, borderRadius: 6, border: "1px solid #ddd", textAlign: "center" },
+  cellEmp: { background: "#faf3df", borderColor: "#d9a441" },
+  cellL: { fontSize: "8pt", textTransform: "uppercase", letterSpacing: "0.08em", color: "#666" },
+  cellV: { fontSize: "18pt", fontWeight: 800, marginTop: 4 },
+  foot: { marginTop: 16, fontSize: "9pt", color: "#888", textAlign: "center" },
+};
 
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Reporte académico — ${escapeHtml(studentName || "Estudiante")}</title>
-<style>
-  @page { size: A4 portrait; margin: 14mm; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #fff; color: #111;
-    font-family: 'Nunito', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    font-size: 12pt; line-height: 1.4; }
-  .head { display: flex; align-items: center; gap: 14px;
-    border-bottom: 2px solid #d9a441; padding-bottom: 10px; margin-bottom: 14px; }
-  .head .title { flex: 1; }
-  .head h1 { margin: 0; font-size: 18pt; font-weight: 700; letter-spacing: 0.04em; line-height: 1.1; }
-  .head .sub { font-size: 9pt; color: #555; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
-  .head .date { font-family: ui-monospace, Consolas, monospace; font-size: 10pt; color: #555; text-align: right; }
-  .fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .field { padding: 8px 10px; border-radius: 6px; border: 1px solid #ddd; }
-  .field .l { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; color: #666; }
-  .field .v { font-size: 12pt; font-weight: 700; margin-top: 2px; }
-  table { width: 100%; border-collapse: collapse; font-size: 11pt; }
-  thead tr { border-bottom: 2px solid #111; }
-  thead th { padding: 8px; text-align: left; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: #555; }
-  thead th.r { text-align: right; }
-  thead th.c { text-align: center; }
-  tbody tr { border-bottom: 1px solid #ccc; }
-  tbody td { padding: 9px 8px; font-family: ui-monospace, Consolas, monospace; }
-  td.num { color: #888; width: 36px; }
-  td.op { font-weight: 700; }
-  td.r { text-align: right; }
-  td.c { text-align: center; font-family: 'Nunito', system-ui, sans-serif; font-weight: 700; }
-  td.dim { color: #888; }
-  td.ok { color: #1e8a5d; }
-  td.err { color: #c33b3b; }
-  td.empty { padding: 24px; text-align: center; color: #888; font-style: italic; }
-  .summary { margin-top: 16px; border-top: 2px solid #d9a441; padding-top: 12px;
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  .cell { padding: 10px; border-radius: 6px; border: 1px solid #ddd; text-align: center; }
-  .cell .l { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; color: #666; }
-  .cell .v { font-size: 18pt; font-weight: 800; margin-top: 4px; }
-  .cell.emp { background: #faf3df; border-color: #d9a441; }
-  .foot { margin-top: 16px; font-size: 9pt; color: #888; text-align: center; }
-  @media screen { body { padding: 24px; max-width: 800px; margin: 0 auto; } }
-</style>
-</head>
-<body>
-  <div class="head">
-    <div class="title">
-      <h1>EDINUN — Ediciones Nacionales Unidas</h1>
-      <div class="sub">Reporte académico · Juegos de Matemáticas</div>
-    </div>
-    <div class="date">${escapeHtml(dateStr)}</div>
-  </div>
+function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, totalEx, accuracy }) {
+  const log = res.log || [];
+  return (
+    <PortalToBody>
+      <div className="ed-print-doc" style={printStyles.doc} aria-hidden="true">
+        <div style={printStyles.head}>
+          <img src="assets/edinun-logo.png" alt="" style={printStyles.logo} />
+          <div style={printStyles.title}>
+            <h1 style={printStyles.org}>EDINUN — Ediciones Nacionales Unidas</h1>
+            <div style={printStyles.sub}>Reporte académico · Juegos de Matemáticas</div>
+          </div>
+          <div style={printStyles.date}>{dateStr}</div>
+        </div>
 
-  <div class="fields">
-    <div class="field"><div class="l">Estudiante</div><div class="v">${escapeHtml(studentName || "—")}</div></div>
-    <div class="field"><div class="l">Categoría</div><div class="v">${escapeHtml(res.category || "—")}</div></div>
-    <div class="field"><div class="l">Tiempo total</div><div class="v">${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}</div></div>
-  </div>
+        <div style={printStyles.fields}>
+          <div style={printStyles.field}>
+            <div style={printStyles.fieldL}>Estudiante</div>
+            <div style={printStyles.fieldV}>{studentName || "—"}</div>
+          </div>
+          <div style={printStyles.field}>
+            <div style={printStyles.fieldL}>Categoría</div>
+            <div style={printStyles.fieldV}>{res.category || "—"}</div>
+          </div>
+          <div style={printStyles.field}>
+            <div style={printStyles.fieldL}>Tiempo total</div>
+            <div style={printStyles.fieldV}>{String(m).padStart(2,"0")}:{String(s).padStart(2,"0")}</div>
+          </div>
+        </div>
 
-  <table>
-    <thead><tr>
-      <th>#</th><th>Operación</th><th class="r">Respuesta del estudiante</th>
-      <th class="r">Resultado correcto</th><th class="c">Estado</th><th class="r">Tiempo</th>
-    </tr></thead>
-    <tbody>${rows}${emptyRow}</tbody>
-  </table>
+        <table style={printStyles.table}>
+          <thead>
+            <tr style={printStyles.thHead}>
+              <th style={printStyles.th}>#</th>
+              <th style={printStyles.th}>Operación</th>
+              <th style={{ ...printStyles.th, ...printStyles.thR }}>Respuesta del estudiante</th>
+              <th style={{ ...printStyles.th, ...printStyles.thR }}>Resultado correcto</th>
+              <th style={{ ...printStyles.th, ...printStyles.thC }}>Estado</th>
+              <th style={{ ...printStyles.th, ...printStyles.thR }}>Tiempo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {log.map((e) => (
+              <tr key={e.idx} style={printStyles.tr}>
+                <td style={{ ...printStyles.td, ...printStyles.tdNum }}>{e.idx}</td>
+                <td style={{ ...printStyles.td, ...printStyles.tdOp }}>{e.a} {e.op} {e.b}</td>
+                <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.userAnswer}</td>
+                <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.correctAnswer}</td>
+                <td style={{ ...printStyles.td, ...printStyles.tdC, ...(e.isCorrect ? printStyles.tdOk : printStyles.tdErr) }}>
+                  {e.isCorrect ? "Correcto" : "Incorrecto"}
+                </td>
+                <td style={{ ...printStyles.td, ...printStyles.tdR, ...printStyles.tdDim }}>{e.time}s</td>
+              </tr>
+            ))}
+            {log.length === 0 && (
+              <tr><td colSpan={6} style={printStyles.tdEmpty}>No se registraron ejercicios en esta sesión.</td></tr>
+            )}
+          </tbody>
+        </table>
 
-  <div class="summary">
-    <div class="cell"><div class="l">Ejercicios</div><div class="v">${attemptedCount} / ${totalEx}</div></div>
-    <div class="cell"><div class="l">Correctos</div><div class="v">${res.solved}</div></div>
-    <div class="cell"><div class="l">Estrellas</div><div class="v">${res.starsEarned}</div></div>
-    <div class="cell emp"><div class="l">Precisión total</div><div class="v">${accuracy}%</div></div>
-  </div>
+        <div style={printStyles.summary}>
+          <div style={printStyles.cell}>
+            <div style={printStyles.cellL}>Ejercicios</div>
+            <div style={printStyles.cellV}>{attemptedCount} / {totalEx}</div>
+          </div>
+          <div style={printStyles.cell}>
+            <div style={printStyles.cellL}>Correctos</div>
+            <div style={printStyles.cellV}>{res.solved}</div>
+          </div>
+          <div style={printStyles.cell}>
+            <div style={printStyles.cellL}>Estrellas</div>
+            <div style={printStyles.cellV}>{res.starsEarned}</div>
+          </div>
+          <div style={{ ...printStyles.cell, ...printStyles.cellEmp }}>
+            <div style={printStyles.cellL}>Precisión total</div>
+            <div style={printStyles.cellV}>{accuracy}%</div>
+          </div>
+        </div>
 
-  <div class="foot">EDINUN GAMES · Reporte generado automáticamente</div>
-
-  ${"<scr"+"ipt>"}
-    /* Esperar al render y disparar print. Tras el print, cerramos.
-       En iOS el usuario puede cancelar el sheet y la ventana queda; OK. */
-    window.addEventListener("load", function () {
-      setTimeout(function () {
-        window.print();
-        setTimeout(function () { window.close(); }, 500);
-      }, 200);
-    });
-  ${"<\/scr"+"ipt>"}
-</body>
-</html>`;
-
-  const w = window.open("", "_blank", "noopener");
-  if (!w) {
-    // Bloqueador de popups: fallback al print clásico (mejor que nada).
-    window.print();
-    return;
-  }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-}
-
-function escapeHtml(s) {
-  return String(s || "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        <div style={printStyles.foot}>EDINUN GAMES · Reporte generado automáticamente</div>
+      </div>
+    </PortalToBody>
+  );
 }
 
 function ResultsScreen({ app, setApp, go }) {
@@ -887,7 +886,7 @@ function ResultsScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* Header pantalla — solo el botón volver. El logo único vive dentro
           del reporte (a la derecha) para evitar que se duplique visualmente. */}
-      <div className="ed-print-hide" style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
+      <div style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
         <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px", fontWeight: 800, letterSpacing: "0.04em" }}>← VOLVER AL INICIO</button>
       </div>
 
@@ -897,7 +896,7 @@ function ResultsScreen({ app, setApp, go }) {
         display: "grid", gridTemplateColumns: "0.85fr 1.4fr", gap: 24, alignItems: "stretch",
       }}>
         {/* Izq: personaje + saludo (fuera del área imprimible) */}
-        <div className="ed-print-hide" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <div style={{
             fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 36,
             background: "linear-gradient(180deg, #fce9a8, #d9a441)",
@@ -914,7 +913,7 @@ function ResultsScreen({ app, setApp, go }) {
         </div>
 
         {/* Der: REPORTE ACADÉMICO (área imprimible) */}
-        <div className="ed-card ed-print-area" style={{ padding: 16, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div className="ed-card" style={{ padding: 16, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* Encabezado del reporte: logo + título institucional */}
           <div style={{
             display: "flex", alignItems: "center", gap: 14,
@@ -1006,11 +1005,11 @@ function ResultsScreen({ app, setApp, go }) {
             <SummaryCell label="Precisión total" value={`${accuracy}%`} tone="#fce9a8" emphasis />
           </div>
 
-          {/* Acciones (no se imprimen) — uniformes y en mayúsculas */}
-          <div className="ed-print-hide" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {/* Acciones — uniformes y en mayúsculas */}
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <button
               className="ed-btn ed-btn-ghost"
-              onClick={() => printReport({ studentName: app.studentName, res, dateStr, m, s, attemptedCount, totalEx, accuracy })}
+              onClick={() => window.print()}
               style={{ padding: "0 10px", fontSize: 13, height: 44, fontWeight: 800, letterSpacing: "0.04em" }}
             >
               IMPRIMIR REPORTE
@@ -1021,6 +1020,20 @@ function ResultsScreen({ app, setApp, go }) {
           </div>
         </div>
       </div>
+
+      {/* Documento imprimible montado vía Portal a <body>. Oculto en pantalla,
+          visible solo en @media print. Esto garantiza que iOS Safari/Chrome
+          puedan imprimirlo correctamente sin pelearse con el lienzo escalado
+          del DeviceStage ni con popups bloqueados. */}
+      <PrintableReport
+        studentName={app.studentName}
+        res={res}
+        dateStr={dateStr}
+        m={m} s={s}
+        attemptedCount={attemptedCount}
+        totalEx={totalEx}
+        accuracy={accuracy}
+      />
     </div>
   );
 }
