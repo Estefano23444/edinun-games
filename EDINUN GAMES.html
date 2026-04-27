@@ -1969,37 +1969,52 @@ const { useState: useStateA, useEffect: useEffectA } = React;
 // Viewport API reporta el área verdaderamente visible y se actualiza
 // cuando la URL bar se muestra/oculta.
 // ─────────────────────────────────────────────────────────────
-// Tracker del último DPR visto. Cuando dpr cambia (zoom del navegador
-// con ctrl+rueda en desktop, o pinch-zoom que queda activo), conservamos
-// el tamaño previo del lienzo: el navegador amplifica visualmente todos
-// los CSS-px (incluido el contenido del lienzo y los glifos del fondo),
-// y eso es exactamente lo que el usuario quiere al hacer zoom.
-// Si recalculáramos en ese momento, el lienzo se achicaría compensando
-// el zoom y el usuario solo vería los glifos crecer mientras el juego
-// se queda chico — pelea entre el zoom del navegador y el JS.
-let _lastDPR = (typeof window !== "undefined") ? (window.devicePixelRatio || 1) : 1;
+// Detección de "resize REAL" vs "zoom del navegador".
+//
+// Idea: el tamaño FÍSICO de la zona visible en píxeles del display es
+// invariante al ctrl+rueda. Cuando subes el zoom de 100 % a 500 %:
+//   · innerWidth en CSS-px se divide entre 5
+//   · devicePixelRatio se multiplica por 5
+//   · innerWidth × devicePixelRatio queda igual ⇒ NO hubo resize real.
+//
+// Cuando arrastras la esquina de la ventana o rotas el dispositivo:
+//   · innerWidth en CSS-px cambia
+//   · devicePixelRatio NO cambia
+//   · innerWidth × devicePixelRatio cambia ⇒ SÍ hubo resize real.
+//
+// Por eso comparamos contra `innerWidth × devicePixelRatio` y solo
+// actualizamos el state cuando ese producto cambia. Así el lienzo se
+// queda con su tamaño CSS previo durante el zoom y el navegador lo
+// amplifica visualmente — junto con los glifos, que ya leen `glyphSize`
+// del mismo state defendido (ver DeviceStage).
+//
+// La defensa anterior (tracker de _lastDPR) era frágil: se actualizaba
+// en CADA evento, así que si el navegador disparaba dos resize seguidos
+// para la misma acción de zoom, el segundo veía el dpr ya guardado y
+// recalculaba el tamaño con el viewport pequeño. Esto causaba que los
+// glifos quedaran enormes mientras el lienzo se recomprimía.
+function physicalSize() {
+  if (typeof window === "undefined") return { w: 0, h: 0 };
+  const dpr = window.devicePixelRatio || 1;
+  return { w: window.innerWidth * dpr, h: window.innerHeight * dpr };
+}
+let _lastPhysical = physicalSize();
 
 function useViewportSize() {
   const [size, setSize] = useStateA(() => readSize());
   useEffectA(() => {
     function onChange() {
-      const dpr = (typeof window !== "undefined") ? (window.devicePixelRatio || 1) : 1;
-      if (Math.abs(dpr - _lastDPR) > 0.05) {
-        // Solo cambió el zoom del navegador, no el viewport real.
-        // Guardamos el nuevo dpr y no actualizamos el tamaño.
-        _lastDPR = dpr;
+      const phys = physicalSize();
+      // Tolerancia de 4 px reales para absorber redondeos del navegador.
+      if (Math.abs(phys.w - _lastPhysical.w) < 4 && Math.abs(phys.h - _lastPhysical.h) < 4) {
+        // Mismo display, distinto zoom — no actualizamos el state.
         return;
       }
-      _lastDPR = dpr;
+      _lastPhysical = phys;
       setSize(readSize());
     }
     window.addEventListener("resize", onChange);
     window.addEventListener("orientationchange", onChange);
-    // Solo nos interesa que `visualViewport.resize` reaccione a la URL bar
-    // mostrándose/escondiéndose. NO escuchamos `scroll` ni cambios de
-    // `scale` — esos vienen del pinch-zoom del usuario, y al recalcular
-    // la escala del lienzo durante el zoom haríamos que el lienzo se
-    // achique justo cuando el usuario quiere agrandarlo.
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", onChange);
     }
