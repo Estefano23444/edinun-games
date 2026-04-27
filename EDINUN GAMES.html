@@ -1963,18 +1963,37 @@ const { useState: useStateA, useEffect: useEffectA } = React;
 // Viewport API reporta el área verdaderamente visible y se actualiza
 // cuando la URL bar se muestra/oculta.
 // ─────────────────────────────────────────────────────────────
+// Tracker del último DPR visto. Cuando dpr cambia (zoom del navegador
+// con ctrl+rueda en desktop, o pinch-zoom que queda activo), conservamos
+// el tamaño previo del lienzo: el navegador amplifica visualmente todos
+// los CSS-px (incluido el contenido del lienzo y los glifos del fondo),
+// y eso es exactamente lo que el usuario quiere al hacer zoom.
+// Si recalculáramos en ese momento, el lienzo se achicaría compensando
+// el zoom y el usuario solo vería los glifos crecer mientras el juego
+// se queda chico — pelea entre el zoom del navegador y el JS.
+let _lastDPR = (typeof window !== "undefined") ? (window.devicePixelRatio || 1) : 1;
+
 function useViewportSize() {
   const [size, setSize] = useStateA(() => readSize());
   useEffectA(() => {
-    function onChange() { setSize(readSize()); }
+    function onChange() {
+      const dpr = (typeof window !== "undefined") ? (window.devicePixelRatio || 1) : 1;
+      if (Math.abs(dpr - _lastDPR) > 0.05) {
+        // Solo cambió el zoom del navegador, no el viewport real.
+        // Guardamos el nuevo dpr y no actualizamos el tamaño.
+        _lastDPR = dpr;
+        return;
+      }
+      _lastDPR = dpr;
+      setSize(readSize());
+    }
     window.addEventListener("resize", onChange);
     window.addEventListener("orientationchange", onChange);
     // Solo nos interesa que `visualViewport.resize` reaccione a la URL bar
     // mostrándose/escondiéndose. NO escuchamos `scroll` ni cambios de
     // `scale` — esos vienen del pinch-zoom del usuario, y al recalcular
     // la escala del lienzo durante el zoom haríamos que el lienzo se
-    // achique justo cuando el usuario quiere agrandarlo (pelea contra
-    // el zoom del navegador).
+    // achique justo cuando el usuario quiere agrandarlo.
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", onChange);
     }
