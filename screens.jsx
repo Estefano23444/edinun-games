@@ -68,24 +68,33 @@ function CosmosBg({ variant = "cosmic" }) {
 // Se incrementa al terminar cada juego. Pensado para servidores estáticos
 // sin backend — sólo HTML + localStorage del navegador.
 // Contador de VISITANTES ─────────────────────────────────────
-// Suma +1 una sola vez por pestaña/sesión usando sessionStorage
-// como guarda; el total vive en localStorage y es compartido entre visitas.
-// Pensado para servidores estáticos sin backend.
+// Suma +1 cada vez que se monta HomeScreen (cada entrada al inicio cuenta,
+// incluso múltiples veces en el mismo dispositivo). El total vive en
+// localStorage y persiste entre sesiones. Pensado para servidores estáticos
+// sin backend.
 function useVisitorCount() {
   const [n, setN] = useState(0);
   useEffect(() => {
     const KEY = "edinun_visitors_v1";
-    const SESSION_KEY = "edinun_visit_counted_v1";
     let current = parseInt(localStorage.getItem(KEY) || "0", 10);
     if (isNaN(current)) current = 0;
-    if (!sessionStorage.getItem(SESSION_KEY)) {
-      current += 1;
-      localStorage.setItem(KEY, String(current));
-      sessionStorage.setItem(SESSION_KEY, "1");
-    }
+    current += 1;
+    localStorage.setItem(KEY, String(current));
     setN(current);
   }, []);
   return n;
+}
+
+// SVG de personitas para el contador de visitantes.
+function PeopleIcon({ size = 18, color = "#fce9a8" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="8" cy="7" r="3" fill={color} />
+      <circle cx="16" cy="7" r="3" fill={color} opacity="0.85" />
+      <path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6v1H2v-1z" fill={color} />
+      <path d="M14 20c0-2 -.7-3.8-1.8-5.2 1-.5 2.1-.8 3.3-.8 3.3 0 6 2.7 6 6v1H14v-1z" fill={color} opacity="0.85" />
+    </svg>
+  );
 }
 
 function incrementGamesCompleted() {
@@ -120,33 +129,26 @@ function HomeScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
 
 
-      {/* Contador de visitantes (arriba izquierda) */}
+      {/* Contador de visitantes (abajo derecha, con icono de personitas) */}
       <div
         style={{
           position: "absolute",
-          top: 22,
-          left: 24,
+          bottom: 18,
+          right: 22,
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          background: "rgba(10,6,35,0.65)",
-          border: "1px solid rgba(242,194,96,0.35)",
+          gap: 8,
+          background: "rgba(10,6,35,0.55)",
+          border: "1px solid rgba(242,194,96,0.3)",
           borderRadius: 999,
-          padding: "8px 14px",
+          padding: "6px 12px",
           backdropFilter: "blur(8px)",
         }}
       >
-        <div
-          style={{
-            width: 8, height: 8, borderRadius: "50%",
-            background: "#2ecc8f",
-            boxShadow: "0 0 8px #2ecc8f",
-            animation: "ed-pulse-glow 2s infinite",
-          }}
-        />
-        <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 12, color: "#f2c260", letterSpacing: "0.08em" }}>
-          <span style={{ color: "rgba(246,241,255,0.6)" }}>VISITANTES · </span>
+        <PeopleIcon size={16} color="#fce9a8" />
+        <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 11, color: "#f2c260", letterSpacing: "0.06em" }}>
           {visitors.toLocaleString("es-CO")}
+          <span style={{ color: "rgba(246,241,255,0.55)", marginLeft: 6 }}>visitas</span>
         </div>
       </div>
 
@@ -205,42 +207,43 @@ function HomeScreen({ app, setApp, go }) {
             </button>
           </div>
 
-          {/* Selección de nivel */}
+          {/* Selección de nivel — botones únicos con color por nivel */}
           <div>
             <div className="ed-label" style={{ marginBottom: 10 }}>
               Selecciona un nivel para jugar
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               {[
-                { id: "basic", label: "Básico", hint: "+  −", chip: "ed-chip-basic" },
-                { id: "medium", label: "Medio", hint: "×", chip: "ed-chip-medium" },
-                { id: "advanced", label: "Avanzado", hint: "÷", chip: "ed-chip-advanced" },
-              ].map((lv) => (
-                <button
-                  key={lv.id}
-                  onClick={() => setLevel(lv.id)}
-                  style={{
-                    padding: "14px 10px",
-                    borderRadius: 18,
-                    background: level === lv.id
-                      ? "linear-gradient(180deg, rgba(79,216,255,0.25), rgba(106,61,214,0.35))"
-                      : "rgba(18,10,55,0.55)",
-                    boxShadow: level === lv.id
-                      ? "inset 0 0 0 2px rgba(79,216,255,0.8), 0 0 24px rgba(79,216,255,0.35)"
-                      : "inset 0 0 0 1px rgba(148,120,255,0.3)",
-                    transition: "all 0.2s ease",
-                    textAlign: "center",
-                    color: "#fff",
-                  }}
-                >
-                  <div className={`ed-chip ${lv.chip}`} style={{ marginBottom: 8 }}>
+                { id: "basic", label: "Básico", grad: "linear-gradient(180deg, #ffc06e, #e4881a)", ink: "#3a2608" },
+                { id: "medium", label: "Medio", grad: "linear-gradient(180deg, #ffe97a, #d7b12a)", ink: "#3a2608" },
+                { id: "advanced", label: "Avanzado", grad: "linear-gradient(180deg, #7ab8ff, #2773d8)", ink: "#08264d" },
+              ].map((lv) => {
+                const active = level === lv.id;
+                return (
+                  <button
+                    key={lv.id}
+                    onClick={() => setLevel(lv.id)}
+                    style={{
+                      padding: "16px 8px",
+                      borderRadius: 18,
+                      background: lv.grad,
+                      color: lv.ink,
+                      fontFamily: "var(--ed-font-display)",
+                      fontWeight: 700,
+                      fontSize: 18,
+                      letterSpacing: "0.02em",
+                      boxShadow: active
+                        ? "inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -3px 0 rgba(0,0,0,0.2), 0 0 0 3px rgba(255,255,255,0.85), 0 0 28px rgba(255,255,255,0.35)"
+                        : "inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -3px 0 rgba(0,0,0,0.18), 0 6px 14px -4px rgba(0,0,0,0.45)",
+                      transform: active ? "translateY(-2px)" : "none",
+                      transition: "all 0.18s ease",
+                      textShadow: "0 1px 0 rgba(255,255,255,0.25)",
+                    }}
+                  >
                     {lv.label}
-                  </div>
-                  <div style={{ fontFamily: "var(--ed-font-display)", fontSize: 18, letterSpacing: "0.12em" }}>
-                    {lv.hint}
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -286,43 +289,47 @@ function CharacterScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
 
 
-      {/* Header */}
-      <div style={{ position: "absolute", top: 20, left: 24, right: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      {/* Header — primero "Hola, X", luego logo grande a la derecha */}
+      <div style={{ position: "absolute", top: 18, left: 24, right: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>
           ← Volver
         </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <EdinunLogoMini size={36} />
-          <div>
-            <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, color: "#f2c260" }}>
-              Hola, {app.studentName || "Estudiante"} 👋
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 700, color: "#fce9a8", fontSize: 20, textShadow: "0 2px 6px rgba(0,0,0,0.45)" }}>
+            Hola, {app.studentName || "Estudiante"} 👋
           </div>
+          <EdinunLogoMini size={64} />
         </div>
       </div>
 
       {/* Contenido */}
       <div style={{
-        position: "absolute", inset: "68px 32px 24px 32px",
-        display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 24, alignItems: "center",
+        position: "absolute", inset: "92px 32px 24px 32px",
+        display: "grid", gridTemplateColumns: "1fr 1.05fr", gap: 24, alignItems: "center",
       }}>
-        {/* Columna izquierda — personaje seleccionado */}
+        {/* Columna izquierda — personaje seleccionado, más grande con frase carismática */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0 }}>
           <div style={{ position: "relative" }}>
             {/* plataforma */}
             <div style={{
               position: "absolute", bottom: 4, left: "50%", transform: "translateX(-50%)",
-              width: 180, height: 24, borderRadius: "50%",
-              background: "radial-gradient(ellipse, rgba(242,194,96,0.4), transparent 70%)",
-              filter: "blur(4px)",
+              width: 220, height: 28, borderRadius: "50%",
+              background: "radial-gradient(ellipse, rgba(242,194,96,0.45), transparent 70%)",
+              filter: "blur(5px)",
             }} />
-            <current.Component size={210} />
+            <current.Component size={280} floating />
           </div>
-          <div style={{ textAlign: "center", marginTop: 2 }}>
-            <h2 className="ed-h1" style={{ fontSize: 26, lineHeight: 1 }}>{current.name}</h2>
+          <div style={{ textAlign: "center", marginTop: 4 }}>
+            <h2 className="ed-h1" style={{ fontSize: 28, lineHeight: 1 }}>{current.name}</h2>
             <div className="ed-label" style={{ color: "#fce9a8", marginTop: 2, fontSize: 10 }}>{current.title}</div>
-            <div className="ed-body" style={{ marginTop: 6, maxWidth: 300, fontStyle: "italic", fontSize: 12, lineHeight: 1.35 }}>
+            <div className="ed-body" style={{ marginTop: 6, maxWidth: 320, fontStyle: "italic", fontSize: 13, lineHeight: 1.35 }}>
               "{current.quote}"
+            </div>
+            <div style={{
+              marginTop: 8, maxWidth: 320, fontFamily: "var(--ed-font-display)", fontWeight: 600,
+              fontSize: 13, color: "#7bf5c4", textShadow: "0 0 12px rgba(123,245,196,0.4)",
+            }}>
+              ✨ Si te equivocas, ¡es parte del camino! Cada número tiene su magia.
             </div>
           </div>
         </div>

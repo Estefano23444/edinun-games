@@ -80,6 +80,7 @@ function EdinunLogoMini({ size = 40 }) {
 }
 
 Object.assign(window, { EdinunLogo, EdinunLogoMini });
+
 // characters.jsx — Personajes 3D estilizados para EDINUN GAMES.
 // Cada uno es un SVG con gradientes radiales + sombras para simular volumen.
 // No son ilustraciones finales — son placeholders pulidos que el equipo de
@@ -565,6 +566,7 @@ Object.assign(window, {
   CharacterAvatar,
   CHARACTERS,
 });
+
 // screens.jsx — Todas las pantallas del prototipo EDINUN GAMES.
 // Importa (globalmente) CHARACTERS, personajes, EdinunLogo, EdinunLogoMini.
 
@@ -635,24 +637,33 @@ function CosmosBg({ variant = "cosmic" }) {
 // Se incrementa al terminar cada juego. Pensado para servidores estáticos
 // sin backend — sólo HTML + localStorage del navegador.
 // Contador de VISITANTES ─────────────────────────────────────
-// Suma +1 una sola vez por pestaña/sesión usando sessionStorage
-// como guarda; el total vive en localStorage y es compartido entre visitas.
-// Pensado para servidores estáticos sin backend.
+// Suma +1 cada vez que se monta HomeScreen (cada entrada al inicio cuenta,
+// incluso múltiples veces en el mismo dispositivo). El total vive en
+// localStorage y persiste entre sesiones. Pensado para servidores estáticos
+// sin backend.
 function useVisitorCount() {
   const [n, setN] = useState(0);
   useEffect(() => {
     const KEY = "edinun_visitors_v1";
-    const SESSION_KEY = "edinun_visit_counted_v1";
     let current = parseInt(localStorage.getItem(KEY) || "0", 10);
     if (isNaN(current)) current = 0;
-    if (!sessionStorage.getItem(SESSION_KEY)) {
-      current += 1;
-      localStorage.setItem(KEY, String(current));
-      sessionStorage.setItem(SESSION_KEY, "1");
-    }
+    current += 1;
+    localStorage.setItem(KEY, String(current));
     setN(current);
   }, []);
   return n;
+}
+
+// SVG de personitas para el contador de visitantes.
+function PeopleIcon({ size = 18, color = "#fce9a8" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="8" cy="7" r="3" fill={color} />
+      <circle cx="16" cy="7" r="3" fill={color} opacity="0.85" />
+      <path d="M2 20c0-3.3 2.7-6 6-6s6 2.7 6 6v1H2v-1z" fill={color} />
+      <path d="M14 20c0-2 -.7-3.8-1.8-5.2 1-.5 2.1-.8 3.3-.8 3.3 0 6 2.7 6 6v1H14v-1z" fill={color} opacity="0.85" />
+    </svg>
+  );
 }
 
 function incrementGamesCompleted() {
@@ -687,33 +698,26 @@ function HomeScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
 
 
-      {/* Contador de visitantes (arriba izquierda) */}
+      {/* Contador de visitantes (abajo derecha, con icono de personitas) */}
       <div
         style={{
           position: "absolute",
-          top: 22,
-          left: 24,
+          bottom: 18,
+          right: 22,
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          background: "rgba(10,6,35,0.65)",
-          border: "1px solid rgba(242,194,96,0.35)",
+          gap: 8,
+          background: "rgba(10,6,35,0.55)",
+          border: "1px solid rgba(242,194,96,0.3)",
           borderRadius: 999,
-          padding: "8px 14px",
+          padding: "6px 12px",
           backdropFilter: "blur(8px)",
         }}
       >
-        <div
-          style={{
-            width: 8, height: 8, borderRadius: "50%",
-            background: "#2ecc8f",
-            boxShadow: "0 0 8px #2ecc8f",
-            animation: "ed-pulse-glow 2s infinite",
-          }}
-        />
-        <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 12, color: "#f2c260", letterSpacing: "0.08em" }}>
-          <span style={{ color: "rgba(246,241,255,0.6)" }}>VISITANTES · </span>
+        <PeopleIcon size={16} color="#fce9a8" />
+        <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 11, color: "#f2c260", letterSpacing: "0.06em" }}>
           {visitors.toLocaleString("es-CO")}
+          <span style={{ color: "rgba(246,241,255,0.55)", marginLeft: 6 }}>visitas</span>
         </div>
       </div>
 
@@ -772,42 +776,43 @@ function HomeScreen({ app, setApp, go }) {
             </button>
           </div>
 
-          {/* Selección de nivel */}
+          {/* Selección de nivel — botones únicos con color por nivel */}
           <div>
             <div className="ed-label" style={{ marginBottom: 10 }}>
               Selecciona un nivel para jugar
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               {[
-                { id: "basic", label: "Básico", hint: "+  −", chip: "ed-chip-basic" },
-                { id: "medium", label: "Medio", hint: "×", chip: "ed-chip-medium" },
-                { id: "advanced", label: "Avanzado", hint: "÷", chip: "ed-chip-advanced" },
-              ].map((lv) => (
-                <button
-                  key={lv.id}
-                  onClick={() => setLevel(lv.id)}
-                  style={{
-                    padding: "14px 10px",
-                    borderRadius: 18,
-                    background: level === lv.id
-                      ? "linear-gradient(180deg, rgba(79,216,255,0.25), rgba(106,61,214,0.35))"
-                      : "rgba(18,10,55,0.55)",
-                    boxShadow: level === lv.id
-                      ? "inset 0 0 0 2px rgba(79,216,255,0.8), 0 0 24px rgba(79,216,255,0.35)"
-                      : "inset 0 0 0 1px rgba(148,120,255,0.3)",
-                    transition: "all 0.2s ease",
-                    textAlign: "center",
-                    color: "#fff",
-                  }}
-                >
-                  <div className={`ed-chip ${lv.chip}`} style={{ marginBottom: 8 }}>
+                { id: "basic", label: "Básico", grad: "linear-gradient(180deg, #ffc06e, #e4881a)", ink: "#3a2608" },
+                { id: "medium", label: "Medio", grad: "linear-gradient(180deg, #ffe97a, #d7b12a)", ink: "#3a2608" },
+                { id: "advanced", label: "Avanzado", grad: "linear-gradient(180deg, #7ab8ff, #2773d8)", ink: "#08264d" },
+              ].map((lv) => {
+                const active = level === lv.id;
+                return (
+                  <button
+                    key={lv.id}
+                    onClick={() => setLevel(lv.id)}
+                    style={{
+                      padding: "16px 8px",
+                      borderRadius: 18,
+                      background: lv.grad,
+                      color: lv.ink,
+                      fontFamily: "var(--ed-font-display)",
+                      fontWeight: 700,
+                      fontSize: 18,
+                      letterSpacing: "0.02em",
+                      boxShadow: active
+                        ? "inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -3px 0 rgba(0,0,0,0.2), 0 0 0 3px rgba(255,255,255,0.85), 0 0 28px rgba(255,255,255,0.35)"
+                        : "inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -3px 0 rgba(0,0,0,0.18), 0 6px 14px -4px rgba(0,0,0,0.45)",
+                      transform: active ? "translateY(-2px)" : "none",
+                      transition: "all 0.18s ease",
+                      textShadow: "0 1px 0 rgba(255,255,255,0.25)",
+                    }}
+                  >
                     {lv.label}
-                  </div>
-                  <div style={{ fontFamily: "var(--ed-font-display)", fontSize: 18, letterSpacing: "0.12em" }}>
-                    {lv.hint}
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -853,43 +858,47 @@ function CharacterScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
 
 
-      {/* Header */}
-      <div style={{ position: "absolute", top: 20, left: 24, right: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      {/* Header — primero "Hola, X", luego logo grande a la derecha */}
+      <div style={{ position: "absolute", top: 18, left: 24, right: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>
           ← Volver
         </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <EdinunLogoMini size={36} />
-          <div>
-            <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, color: "#f2c260" }}>
-              Hola, {app.studentName || "Estudiante"} 👋
-            </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 700, color: "#fce9a8", fontSize: 20, textShadow: "0 2px 6px rgba(0,0,0,0.45)" }}>
+            Hola, {app.studentName || "Estudiante"} 👋
           </div>
+          <EdinunLogoMini size={64} />
         </div>
       </div>
 
       {/* Contenido */}
       <div style={{
-        position: "absolute", inset: "68px 32px 24px 32px",
-        display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 24, alignItems: "center",
+        position: "absolute", inset: "92px 32px 24px 32px",
+        display: "grid", gridTemplateColumns: "1fr 1.05fr", gap: 24, alignItems: "center",
       }}>
-        {/* Columna izquierda — personaje seleccionado */}
+        {/* Columna izquierda — personaje seleccionado, más grande con frase carismática */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0 }}>
           <div style={{ position: "relative" }}>
             {/* plataforma */}
             <div style={{
               position: "absolute", bottom: 4, left: "50%", transform: "translateX(-50%)",
-              width: 180, height: 24, borderRadius: "50%",
-              background: "radial-gradient(ellipse, rgba(242,194,96,0.4), transparent 70%)",
-              filter: "blur(4px)",
+              width: 220, height: 28, borderRadius: "50%",
+              background: "radial-gradient(ellipse, rgba(242,194,96,0.45), transparent 70%)",
+              filter: "blur(5px)",
             }} />
-            <current.Component size={210} />
+            <current.Component size={280} floating />
           </div>
-          <div style={{ textAlign: "center", marginTop: 2 }}>
-            <h2 className="ed-h1" style={{ fontSize: 26, lineHeight: 1 }}>{current.name}</h2>
+          <div style={{ textAlign: "center", marginTop: 4 }}>
+            <h2 className="ed-h1" style={{ fontSize: 28, lineHeight: 1 }}>{current.name}</h2>
             <div className="ed-label" style={{ color: "#fce9a8", marginTop: 2, fontSize: 10 }}>{current.title}</div>
-            <div className="ed-body" style={{ marginTop: 6, maxWidth: 300, fontStyle: "italic", fontSize: 12, lineHeight: 1.35 }}>
+            <div className="ed-body" style={{ marginTop: 6, maxWidth: 320, fontStyle: "italic", fontSize: 13, lineHeight: 1.35 }}>
               "{current.quote}"
+            </div>
+            <div style={{
+              marginTop: 8, maxWidth: 320, fontFamily: "var(--ed-font-display)", fontWeight: 600,
+              fontSize: 13, color: "#7bf5c4", textShadow: "0 0 12px rgba(123,245,196,0.4)",
+            }}>
+              ✨ Si te equivocas, ¡es parte del camino! Cada número tiene su magia.
             </div>
           </div>
         </div>
@@ -1077,6 +1086,7 @@ function MenuScreen({ app, setApp, go }) {
 }
 
 Object.assign(window, { HomeScreen, CharacterScreen, MenuScreen, CosmosBg, CATEGORIES, incrementGamesCompleted });
+
 // game-screens.jsx — Juego, resultados, perfil.
 
 const { useState: useStateG, useEffect: useEffectG, useRef: useRefG, useMemo: useMemoG } = React;
@@ -1121,6 +1131,18 @@ function digits(n) {
 // ─────────────────────────────────────────────────────────────
 // PANTALLA DE JUEGO — pizarra estilo referencia pero cósmica
 // ─────────────────────────────────────────────────────────────
+// Frases motivadoras matemáticas para cuando el estudiante se equivoca
+// (no se repite el ejercicio; el feedback acompaña con carisma).
+const ENCOURAGEMENTS = [
+  "¡Casi! Sigue intentándolo.",
+  "Los números no muerden 🔢",
+  "¡La próxima es tuya!",
+  "Equivocarse también es aprender.",
+  "Las matemáticas son una aventura.",
+  "¡Vamos al siguiente reto!",
+  "Cada error te acerca al acierto.",
+];
+
 function GameScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
   const cat = app.currentCategory || "suma";
@@ -1131,14 +1153,19 @@ function GameScreen({ app, setApp, go }) {
   const [elapsed, setElapsed] = useStateG(0);
   const [stars, setStars] = useStateG(app.stars || 48);
   const [streak, setStreak] = useStateG(0);
-  const [solved, setSolved] = useStateG(0);
+  const [maxStreak, setMaxStreak] = useStateG(0);
+  const [solved, setSolved] = useStateG(0);       // aciertos en la sesión
+  const [attempted, setAttempted] = useStateG(0); // ejercicios intentados (correctos o no)
+  const [starsSession, setStarsSession] = useStateG(0); // estrellas ganadas en la sesión actual
   const [feedback, setFeedback] = useStateG(null); // 'ok' | 'err' | null
+  const [feedbackMsg, setFeedbackMsg] = useStateG("");
   const [hintOn, setHintOn] = useStateG(false);
 
   const slots = digits(problem.answer).length;
   const started = useRefG(Date.now());
+  const exerciseStart = useRefG(Date.now());
 
-  // Cronómetro
+  // Cronómetro total
   useEffectG(() => {
     const id = setInterval(() => {
       setElapsed(Math.floor((Date.now() - started.current) / 1000));
@@ -1182,49 +1209,63 @@ function GameScreen({ app, setApp, go }) {
   function verify() {
     const filled = Array.from({ length: slots }, (_, i) => answer[i]);
     if (filled.some(d => d === undefined || d === "")) {
-      // Faltan dígitos: feedback de error suave
+      // Faltan dígitos: feedback de error suave (no consume intento)
       setFeedback("err");
-      setTimeout(() => setFeedback(null), 600);
+      setFeedbackMsg("Completa todos los casilleros");
+      setTimeout(() => { setFeedback(null); setFeedbackMsg(""); }, 700);
       return;
     }
     const joined = filled.join("");
     const entered = parseInt(joined, 10);
-    if (entered === problem.answer) {
-      setFeedback("ok");
-      setStars((s) => s + 5);
-      setStreak((s) => s + 1);
-      setSolved((s) => s + 1);
-      setTimeout(() => {
-        setFeedback(null);
-        setAnswer([]);
-        if (solved + 1 >= 3) {
-          // Al completar 3 rondas, ir a resultados
-          setApp((s) => ({
-            ...s,
-            stars,
-            lastResult: {
-              category: catLabel,
-              solved: solved + 1,
-              total: 3,
-              time: elapsed,
-              streak: streak + 1,
-              starsEarned: (solved + 1) * 5,
-            },
-          }));
-          window.incrementGamesCompleted && window.incrementGamesCompleted();
-          go("results");
-        } else {
-          setProblem(makeProblem(cat));
-        }
-      }, 900);
-    } else {
-      setFeedback("err");
-      setStreak(0);
-      setTimeout(() => {
-        setFeedback(null);
-        setAnswer([]);
-      }, 700);
-    }
+    const isCorrect = entered === problem.answer;
+    const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
+    // Estrellas por ejercicio: máximo 10, decrece con el tiempo. <3s → 10, +3s cada vez.
+    const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
+
+    const newAttempted = attempted + 1;
+    const newSolved = solved + (isCorrect ? 1 : 0);
+    const newStreak = isCorrect ? streak + 1 : 0;
+    const newMaxStreak = Math.max(maxStreak, newStreak);
+    const newStarsSession = starsSession + earned;
+    const newStarsTotal = stars + earned;
+
+    setFeedback(isCorrect ? "ok" : "err");
+    setFeedbackMsg(isCorrect
+      ? `+${earned} ⭐`
+      : ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]
+    );
+    setAttempted(newAttempted);
+    setSolved(newSolved);
+    setStreak(newStreak);
+    setMaxStreak(newMaxStreak);
+    setStars(newStarsTotal);
+    setStarsSession(newStarsSession);
+
+    const wait = isCorrect ? 950 : 1200;
+    setTimeout(() => {
+      setFeedback(null);
+      setFeedbackMsg("");
+      setAnswer([]);
+      if (newAttempted >= 3) {
+        setApp((s) => ({
+          ...s,
+          stars: newStarsTotal,
+          lastResult: {
+            category: catLabel,
+            solved: newSolved,
+            total: 3,
+            time: elapsed,
+            streak: newMaxStreak,
+            starsEarned: newStarsSession,
+          },
+        }));
+        window.incrementGamesCompleted && window.incrementGamesCompleted();
+        go("results");
+      } else {
+        setProblem(makeProblem(cat));
+        exerciseStart.current = Date.now();
+      }
+    }, wait);
   }
 
   function formatTime(s) {
@@ -1246,11 +1287,18 @@ function GameScreen({ app, setApp, go }) {
 
 
       {/* Top HUD */}
-      <div style={{ position: "absolute", top: 12, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        {/* Izq: logo mini + back */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button className="ed-btn ed-btn-ghost" onClick={() => go("character")} style={{ padding: "6px 10px", fontSize: 13 }}>← Volver</button>
-          <EdinunLogoMini size={34} />
+      <div style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        {/* Izq: logo grande + back directo a home (cambiar de nivel) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            className="ed-btn ed-btn-ghost"
+            onClick={() => go("home")}
+            title="Cambiar de nivel"
+            style={{ padding: "6px 10px", fontSize: 13 }}
+          >
+            ← Cambiar nivel
+          </button>
+          <EdinunLogoMini size={56} />
         </div>
 
         {/* Centro: barra de niveles */}
@@ -1382,7 +1430,6 @@ function GameScreen({ app, setApp, go }) {
               gridTemplateColumns: `${OP_W}px repeat(${columns}, ${DIGIT_W}px)`,
               gap: GAP, justifyContent: "center", alignItems: "center",
               fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 54, color: "#fff",
-              textShadow: "0 3px 0 rgba(0,0,0,0.28)",
               lineHeight: 1,
             }}>
               <span />
@@ -1395,7 +1442,6 @@ function GameScreen({ app, setApp, go }) {
               gridTemplateColumns: `${OP_W}px repeat(${columns}, ${DIGIT_W}px)`,
               gap: GAP, justifyContent: "center", alignItems: "center",
               fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 54, color: "#fff",
-              textShadow: "0 3px 0 rgba(0,0,0,0.28)",
               lineHeight: 1, marginTop: 2,
             }}>
               <span style={{ textAlign: "center" }}>{problem.op}</span>
@@ -1431,29 +1477,52 @@ function GameScreen({ app, setApp, go }) {
                   <div
                     key={i}
                     className={`ed-answer-slot ${isActive ? "active" : ""} ${filled ? "filled" : ""}`}
+                    draggable={filled}
+                    onDragStart={(e) => {
+                      if (!filled) return;
+                      e.dataTransfer.setData("text/plain", `s:${i}:${d}`);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.currentTarget.classList.add("dragging");
+                    }}
+                    onDragEnd={(e) => e.currentTarget.classList.remove("dragging")}
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }}
                     onDragLeave={(e) => e.currentTarget.classList.remove("drag-over")}
                     onDrop={(e) => {
                       e.preventDefault();
                       e.currentTarget.classList.remove("drag-over");
-                      const digit = e.dataTransfer.getData("text/plain");
-                      if (digit === "") return;
+                      const data = e.dataTransfer.getData("text/plain");
+                      if (!data) return;
                       setAnswer((prev) => {
                         const next = [...prev];
                         while (next.length < slots) next.push(undefined);
-                        next[i] = digit;
+                        if (data.startsWith("s:")) {
+                          // Intercambio entre slots: s:<srcIdx>:<digit>
+                          const parts = data.split(":");
+                          const srcIdx = parseInt(parts[1], 10);
+                          const srcDigit = parts.slice(2).join(":");
+                          if (Number.isNaN(srcIdx) || srcIdx === i) return next;
+                          const here = next[i];
+                          next[i] = srcDigit;
+                          next[srcIdx] = here; // queda undefined si el destino estaba vacío
+                        } else if (data.startsWith("n:")) {
+                          // Desde el numpad: n:<digit>
+                          next[i] = data.slice(2);
+                        } else {
+                          // Compatibilidad: tratar como dígito directo
+                          next[i] = data;
+                        }
                         return next;
                       });
                     }}
                     onClick={() => { if (filled) eraseAt(i); }}
-                    title={filled ? "Toca para borrar este dígito" : "Arrastra un número aquí"}
+                    title={filled ? "Toca para borrar · arrastra para mover/intercambiar" : "Arrastra un número aquí"}
                     style={{
                       width: DIGIT_W, height: 62, fontSize: 36,
                       margin: "0 auto",
                       background: feedback === "ok" ? "rgba(46,204,143,0.4)" : feedback === "err" ? "rgba(255,107,107,0.4)" : undefined,
                       borderColor: feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
                       color: "#fff",
-                      cursor: filled ? "pointer" : "default",
+                      cursor: filled ? "grab" : "default",
                     }}
                   >
                     {filled ? d : ""}
@@ -1478,7 +1547,7 @@ function GameScreen({ app, setApp, go }) {
               className="ed-numpad-key ed-draggable"
               draggable="true"
               onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", d);
+                e.dataTransfer.setData("text/plain", `n:${d}`);
                 e.dataTransfer.effectAllowed = "copy";
                 e.currentTarget.classList.add("dragging");
               }}
@@ -1519,20 +1588,32 @@ function GameScreen({ app, setApp, go }) {
         </button>
       </div>
 
-      {/* Feedback overlay */}
+      {/* Feedback overlay con frase motivadora */}
       {feedback && (
         <div style={{
           position: "absolute", inset: 0, pointerEvents: "none",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 8,
           animation: "ed-pop-in 0.3s",
         }}>
           <div style={{
-            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 80,
+            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 72,
             color: feedback === "ok" ? "#2ecc8f" : "#ff6b6b",
             textShadow: "0 4px 0 rgba(0,0,0,0.35), 0 0 40px currentColor",
           }}>
             {feedback === "ok" ? "¡EXCELENTE!" : "¡UPS!"}
           </div>
+          {feedbackMsg && (
+            <div style={{
+              fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 22,
+              color: feedback === "ok" ? "#fce9a8" : "#fff",
+              background: "rgba(0,0,0,0.5)",
+              padding: "6px 18px", borderRadius: 999,
+              textShadow: "0 2px 6px rgba(0,0,0,0.6)",
+            }}>
+              {feedbackMsg}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1546,7 +1627,8 @@ function ResultsScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
   const res = app.lastResult || { category: "Sumas", solved: 0, total: 3, time: 0, streak: 0, starsEarned: 0 };
   const m = Math.floor(res.time / 60), s = res.time % 60;
-  const accuracy = 100;
+  const totalEx = res.total || 3;
+  const accuracy = totalEx > 0 ? Math.round((res.solved / totalEx) * 100) : 0;
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
@@ -1576,10 +1658,10 @@ function ResultsScreen({ app, setApp, go }) {
         }
       `}</style>
 
-      {/* Header */}
-      <div style={{ position: "absolute", top: 16, left: 24, right: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      {/* Header — logo grande centrado-derecha */}
+      <div style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>← Volver</button>
-        <EdinunLogoMini size={36} />
+        <EdinunLogoMini size={64} />
       </div>
 
       {/* Contenido central */}
@@ -1648,11 +1730,6 @@ function ResultsScreen({ app, setApp, go }) {
               </div>
             </div>
             <div style={{ fontSize: 34 }}>🏆</div>
-          </div>
-
-          {/* Trazabilidad */}
-          <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 10, color: "var(--ed-ink-soft)", background: "rgba(0,0,0,0.25)", padding: 6, borderRadius: 8, marginBottom: 10 }}>
-            ID sesión: EDN-{Date.now().toString(36).toUpperCase().slice(-6)} · Guardado ✓
           </div>
 
           {/* Acciones */}
@@ -1786,6 +1863,7 @@ function ProfileScreen({ app, setApp, go }) {
 }
 
 Object.assign(window, { GameScreen, ResultsScreen });
+
 // app.jsx — Shell de producción EDINUN GAMES.
 // Enrutador por estado y device stage adaptativo (desktop / tablet / mobile).
 // Móvil portrait: el contenido NUNCA rota; queda letterboxed y obliga al

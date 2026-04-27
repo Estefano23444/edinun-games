@@ -42,6 +42,18 @@ function digits(n) {
 // ─────────────────────────────────────────────────────────────
 // PANTALLA DE JUEGO — pizarra estilo referencia pero cósmica
 // ─────────────────────────────────────────────────────────────
+// Frases motivadoras matemáticas para cuando el estudiante se equivoca
+// (no se repite el ejercicio; el feedback acompaña con carisma).
+const ENCOURAGEMENTS = [
+  "¡Casi! Sigue intentándolo.",
+  "Los números no muerden 🔢",
+  "¡La próxima es tuya!",
+  "Equivocarse también es aprender.",
+  "Las matemáticas son una aventura.",
+  "¡Vamos al siguiente reto!",
+  "Cada error te acerca al acierto.",
+];
+
 function GameScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
   const cat = app.currentCategory || "suma";
@@ -52,14 +64,19 @@ function GameScreen({ app, setApp, go }) {
   const [elapsed, setElapsed] = useStateG(0);
   const [stars, setStars] = useStateG(app.stars || 48);
   const [streak, setStreak] = useStateG(0);
-  const [solved, setSolved] = useStateG(0);
+  const [maxStreak, setMaxStreak] = useStateG(0);
+  const [solved, setSolved] = useStateG(0);       // aciertos en la sesión
+  const [attempted, setAttempted] = useStateG(0); // ejercicios intentados (correctos o no)
+  const [starsSession, setStarsSession] = useStateG(0); // estrellas ganadas en la sesión actual
   const [feedback, setFeedback] = useStateG(null); // 'ok' | 'err' | null
+  const [feedbackMsg, setFeedbackMsg] = useStateG("");
   const [hintOn, setHintOn] = useStateG(false);
 
   const slots = digits(problem.answer).length;
   const started = useRefG(Date.now());
+  const exerciseStart = useRefG(Date.now());
 
-  // Cronómetro
+  // Cronómetro total
   useEffectG(() => {
     const id = setInterval(() => {
       setElapsed(Math.floor((Date.now() - started.current) / 1000));
@@ -103,49 +120,63 @@ function GameScreen({ app, setApp, go }) {
   function verify() {
     const filled = Array.from({ length: slots }, (_, i) => answer[i]);
     if (filled.some(d => d === undefined || d === "")) {
-      // Faltan dígitos: feedback de error suave
+      // Faltan dígitos: feedback de error suave (no consume intento)
       setFeedback("err");
-      setTimeout(() => setFeedback(null), 600);
+      setFeedbackMsg("Completa todos los casilleros");
+      setTimeout(() => { setFeedback(null); setFeedbackMsg(""); }, 700);
       return;
     }
     const joined = filled.join("");
     const entered = parseInt(joined, 10);
-    if (entered === problem.answer) {
-      setFeedback("ok");
-      setStars((s) => s + 5);
-      setStreak((s) => s + 1);
-      setSolved((s) => s + 1);
-      setTimeout(() => {
-        setFeedback(null);
-        setAnswer([]);
-        if (solved + 1 >= 3) {
-          // Al completar 3 rondas, ir a resultados
-          setApp((s) => ({
-            ...s,
-            stars,
-            lastResult: {
-              category: catLabel,
-              solved: solved + 1,
-              total: 3,
-              time: elapsed,
-              streak: streak + 1,
-              starsEarned: (solved + 1) * 5,
-            },
-          }));
-          window.incrementGamesCompleted && window.incrementGamesCompleted();
-          go("results");
-        } else {
-          setProblem(makeProblem(cat));
-        }
-      }, 900);
-    } else {
-      setFeedback("err");
-      setStreak(0);
-      setTimeout(() => {
-        setFeedback(null);
-        setAnswer([]);
-      }, 700);
-    }
+    const isCorrect = entered === problem.answer;
+    const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
+    // Estrellas por ejercicio: máximo 10, decrece con el tiempo. <3s → 10, +3s cada vez.
+    const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
+
+    const newAttempted = attempted + 1;
+    const newSolved = solved + (isCorrect ? 1 : 0);
+    const newStreak = isCorrect ? streak + 1 : 0;
+    const newMaxStreak = Math.max(maxStreak, newStreak);
+    const newStarsSession = starsSession + earned;
+    const newStarsTotal = stars + earned;
+
+    setFeedback(isCorrect ? "ok" : "err");
+    setFeedbackMsg(isCorrect
+      ? `+${earned} ⭐`
+      : ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]
+    );
+    setAttempted(newAttempted);
+    setSolved(newSolved);
+    setStreak(newStreak);
+    setMaxStreak(newMaxStreak);
+    setStars(newStarsTotal);
+    setStarsSession(newStarsSession);
+
+    const wait = isCorrect ? 950 : 1200;
+    setTimeout(() => {
+      setFeedback(null);
+      setFeedbackMsg("");
+      setAnswer([]);
+      if (newAttempted >= 3) {
+        setApp((s) => ({
+          ...s,
+          stars: newStarsTotal,
+          lastResult: {
+            category: catLabel,
+            solved: newSolved,
+            total: 3,
+            time: elapsed,
+            streak: newMaxStreak,
+            starsEarned: newStarsSession,
+          },
+        }));
+        window.incrementGamesCompleted && window.incrementGamesCompleted();
+        go("results");
+      } else {
+        setProblem(makeProblem(cat));
+        exerciseStart.current = Date.now();
+      }
+    }, wait);
   }
 
   function formatTime(s) {
@@ -167,11 +198,18 @@ function GameScreen({ app, setApp, go }) {
 
 
       {/* Top HUD */}
-      <div style={{ position: "absolute", top: 12, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        {/* Izq: logo mini + back */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button className="ed-btn ed-btn-ghost" onClick={() => go("character")} style={{ padding: "6px 10px", fontSize: 13 }}>← Volver</button>
-          <EdinunLogoMini size={34} />
+      <div style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        {/* Izq: logo grande + back directo a home (cambiar de nivel) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            className="ed-btn ed-btn-ghost"
+            onClick={() => go("home")}
+            title="Cambiar de nivel"
+            style={{ padding: "6px 10px", fontSize: 13 }}
+          >
+            ← Cambiar nivel
+          </button>
+          <EdinunLogoMini size={56} />
         </div>
 
         {/* Centro: barra de niveles */}
@@ -303,7 +341,6 @@ function GameScreen({ app, setApp, go }) {
               gridTemplateColumns: `${OP_W}px repeat(${columns}, ${DIGIT_W}px)`,
               gap: GAP, justifyContent: "center", alignItems: "center",
               fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 54, color: "#fff",
-              textShadow: "0 3px 0 rgba(0,0,0,0.28)",
               lineHeight: 1,
             }}>
               <span />
@@ -316,7 +353,6 @@ function GameScreen({ app, setApp, go }) {
               gridTemplateColumns: `${OP_W}px repeat(${columns}, ${DIGIT_W}px)`,
               gap: GAP, justifyContent: "center", alignItems: "center",
               fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 54, color: "#fff",
-              textShadow: "0 3px 0 rgba(0,0,0,0.28)",
               lineHeight: 1, marginTop: 2,
             }}>
               <span style={{ textAlign: "center" }}>{problem.op}</span>
@@ -352,29 +388,52 @@ function GameScreen({ app, setApp, go }) {
                   <div
                     key={i}
                     className={`ed-answer-slot ${isActive ? "active" : ""} ${filled ? "filled" : ""}`}
+                    draggable={filled}
+                    onDragStart={(e) => {
+                      if (!filled) return;
+                      e.dataTransfer.setData("text/plain", `s:${i}:${d}`);
+                      e.dataTransfer.effectAllowed = "move";
+                      e.currentTarget.classList.add("dragging");
+                    }}
+                    onDragEnd={(e) => e.currentTarget.classList.remove("dragging")}
                     onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }}
                     onDragLeave={(e) => e.currentTarget.classList.remove("drag-over")}
                     onDrop={(e) => {
                       e.preventDefault();
                       e.currentTarget.classList.remove("drag-over");
-                      const digit = e.dataTransfer.getData("text/plain");
-                      if (digit === "") return;
+                      const data = e.dataTransfer.getData("text/plain");
+                      if (!data) return;
                       setAnswer((prev) => {
                         const next = [...prev];
                         while (next.length < slots) next.push(undefined);
-                        next[i] = digit;
+                        if (data.startsWith("s:")) {
+                          // Intercambio entre slots: s:<srcIdx>:<digit>
+                          const parts = data.split(":");
+                          const srcIdx = parseInt(parts[1], 10);
+                          const srcDigit = parts.slice(2).join(":");
+                          if (Number.isNaN(srcIdx) || srcIdx === i) return next;
+                          const here = next[i];
+                          next[i] = srcDigit;
+                          next[srcIdx] = here; // queda undefined si el destino estaba vacío
+                        } else if (data.startsWith("n:")) {
+                          // Desde el numpad: n:<digit>
+                          next[i] = data.slice(2);
+                        } else {
+                          // Compatibilidad: tratar como dígito directo
+                          next[i] = data;
+                        }
                         return next;
                       });
                     }}
                     onClick={() => { if (filled) eraseAt(i); }}
-                    title={filled ? "Toca para borrar este dígito" : "Arrastra un número aquí"}
+                    title={filled ? "Toca para borrar · arrastra para mover/intercambiar" : "Arrastra un número aquí"}
                     style={{
                       width: DIGIT_W, height: 62, fontSize: 36,
                       margin: "0 auto",
                       background: feedback === "ok" ? "rgba(46,204,143,0.4)" : feedback === "err" ? "rgba(255,107,107,0.4)" : undefined,
                       borderColor: feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
                       color: "#fff",
-                      cursor: filled ? "pointer" : "default",
+                      cursor: filled ? "grab" : "default",
                     }}
                   >
                     {filled ? d : ""}
@@ -399,7 +458,7 @@ function GameScreen({ app, setApp, go }) {
               className="ed-numpad-key ed-draggable"
               draggable="true"
               onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", d);
+                e.dataTransfer.setData("text/plain", `n:${d}`);
                 e.dataTransfer.effectAllowed = "copy";
                 e.currentTarget.classList.add("dragging");
               }}
@@ -440,20 +499,32 @@ function GameScreen({ app, setApp, go }) {
         </button>
       </div>
 
-      {/* Feedback overlay */}
+      {/* Feedback overlay con frase motivadora */}
       {feedback && (
         <div style={{
           position: "absolute", inset: 0, pointerEvents: "none",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 8,
           animation: "ed-pop-in 0.3s",
         }}>
           <div style={{
-            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 80,
+            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 72,
             color: feedback === "ok" ? "#2ecc8f" : "#ff6b6b",
             textShadow: "0 4px 0 rgba(0,0,0,0.35), 0 0 40px currentColor",
           }}>
             {feedback === "ok" ? "¡EXCELENTE!" : "¡UPS!"}
           </div>
+          {feedbackMsg && (
+            <div style={{
+              fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 22,
+              color: feedback === "ok" ? "#fce9a8" : "#fff",
+              background: "rgba(0,0,0,0.5)",
+              padding: "6px 18px", borderRadius: 999,
+              textShadow: "0 2px 6px rgba(0,0,0,0.6)",
+            }}>
+              {feedbackMsg}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -467,7 +538,8 @@ function ResultsScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
   const res = app.lastResult || { category: "Sumas", solved: 0, total: 3, time: 0, streak: 0, starsEarned: 0 };
   const m = Math.floor(res.time / 60), s = res.time % 60;
-  const accuracy = 100;
+  const totalEx = res.total || 3;
+  const accuracy = totalEx > 0 ? Math.round((res.solved / totalEx) * 100) : 0;
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
@@ -497,10 +569,10 @@ function ResultsScreen({ app, setApp, go }) {
         }
       `}</style>
 
-      {/* Header */}
-      <div style={{ position: "absolute", top: 16, left: 24, right: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      {/* Header — logo grande centrado-derecha */}
+      <div style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>← Volver</button>
-        <EdinunLogoMini size={36} />
+        <EdinunLogoMini size={64} />
       </div>
 
       {/* Contenido central */}
@@ -569,11 +641,6 @@ function ResultsScreen({ app, setApp, go }) {
               </div>
             </div>
             <div style={{ fontSize: 34 }}>🏆</div>
-          </div>
-
-          {/* Trazabilidad */}
-          <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 10, color: "var(--ed-ink-soft)", background: "rgba(0,0,0,0.25)", padding: 6, borderRadius: 8, marginBottom: 10 }}>
-            ID sesión: EDN-{Date.now().toString(36).toUpperCase().slice(-6)} · Guardado ✓
           </div>
 
           {/* Acciones */}
