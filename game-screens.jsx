@@ -372,9 +372,9 @@ function GameScreen({ app, setApp, go }) {
           Columnas CDU alineadas verticalmente. Los slots quedan
           debajo de la línea divisoria, directamente bajo las columnas. */}
       {(() => {
-        const DIGIT_W = 54;     // ancho de cada columna (número/slot)
+        const DIGIT_W = 64;     // ancho de cada columna (número/slot)
         const GAP = 10;         // gap entre columnas
-        const OP_W = 44;        // ancho de la celda del operador
+        const OP_W = 50;        // ancho de la celda del operador
         // CRÍTICO: el número de columnas debe cubrir tanto los operandos
         // como el resultado. Si slots > maxLen (ej. 59+74=133 → 3 slots, maxLen=2),
         // ampliamos el grid y padeamos los operandos a la izquierda con celdas vacías.
@@ -504,7 +504,7 @@ function GameScreen({ app, setApp, go }) {
                     onClick={() => { if (filled) eraseAt(i); }}
                     title={filled ? "Toca para borrar · arrastra para mover/intercambiar" : "Arrastra un número aquí"}
                     style={{
-                      width: DIGIT_W, height: 62, fontSize: 36,
+                      width: DIGIT_W, height: 72, fontSize: 42,
                       margin: "0 auto",
                       borderColor: feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
                       boxShadow: feedback === "ok"
@@ -525,10 +525,13 @@ function GameScreen({ app, setApp, go }) {
         );
       })()}
 
-      {/* Fichas arrastrables — fila inferior centrada */}
+      {/* Fichas arrastrables — fila inferior centrada. Tamaño grande pensado
+          para tap cómodo en móvil (después del scale uniforme del lienzo, una
+          tecla de 60×64 a scale 0.6 queda ~36×38 en pantalla, suficiente para
+          el dedo de un niño). */}
       <div style={{
-        position: "absolute", bottom: 18, left: "50%", transform: "translateX(-50%)",
-        display: "grid", gridTemplateColumns: "repeat(10, 48px)", gap: 8,
+        position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)",
+        display: "grid", gridTemplateColumns: "repeat(10, 60px)", gap: 8,
       }}>
         {["1","2","3","4","5","6","7","8","9","0"].map((d, i) => {
           const color = ["#ef5a5a","#f5a623","#f5d84b","#4fa0ff","#2ecc8f"][i % 5];
@@ -545,7 +548,7 @@ function GameScreen({ app, setApp, go }) {
               onDragEnd={(e) => e.currentTarget.classList.remove("dragging")}
               onClick={() => press(d)}
               style={{
-                height: 52, fontSize: 22,
+                height: 64, fontSize: 30,
                 borderColor: color,
                 borderWidth: 2, borderStyle: "solid",
                 cursor: "grab",
@@ -738,6 +741,137 @@ function formatOp(e) {
   return `${e.a} ${e.op} ${e.b}`;
 }
 
+// printReport — abre una ventana nueva con HTML limpio (sin DeviceStage,
+// sin transform:scale, sin position:fixed) y dispara window.print() ahí.
+//
+// Por qué: el approach anterior usaba @media print + visibility:hidden + un
+// inset:0 sobre .ed-print-area dentro del lienzo escalado. En iOS Safari
+// (y otros navegadores móviles) esa combinación produce PDFs en blanco
+// porque el motor de print intenta resolver el transform:scale del padre
+// y se rinde. Una ventana nueva con DOM aislado evita el problema.
+function printReport({ studentName, res, dateStr, m, s, attemptedCount, totalEx, accuracy }) {
+  const rows = (res.log || []).map((e) => `
+    <tr>
+      <td class="num">${e.idx}</td>
+      <td class="op">${e.a} ${e.op} ${e.b}</td>
+      <td class="r">${e.userAnswer}</td>
+      <td class="r">${e.correctAnswer}</td>
+      <td class="c ${e.isCorrect ? "ok" : "err"}">${e.isCorrect ? "Correcto" : "Incorrecto"}</td>
+      <td class="r dim">${e.time}s</td>
+    </tr>
+  `).join("");
+  const emptyRow = (res.log || []).length === 0
+    ? `<tr><td colspan="6" class="empty">No se registraron ejercicios en esta sesión.</td></tr>`
+    : "";
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Reporte académico — ${escapeHtml(studentName || "Estudiante")}</title>
+<style>
+  @page { size: A4 portrait; margin: 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #111;
+    font-family: 'Nunito', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size: 12pt; line-height: 1.4; }
+  .head { display: flex; align-items: center; gap: 14px;
+    border-bottom: 2px solid #d9a441; padding-bottom: 10px; margin-bottom: 14px; }
+  .head .title { flex: 1; }
+  .head h1 { margin: 0; font-size: 18pt; font-weight: 700; letter-spacing: 0.04em; line-height: 1.1; }
+  .head .sub { font-size: 9pt; color: #555; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
+  .head .date { font-family: ui-monospace, Consolas, monospace; font-size: 10pt; color: #555; text-align: right; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .field { padding: 8px 10px; border-radius: 6px; border: 1px solid #ddd; }
+  .field .l { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; color: #666; }
+  .field .v { font-size: 12pt; font-weight: 700; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11pt; }
+  thead tr { border-bottom: 2px solid #111; }
+  thead th { padding: 8px; text-align: left; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: #555; }
+  thead th.r { text-align: right; }
+  thead th.c { text-align: center; }
+  tbody tr { border-bottom: 1px solid #ccc; }
+  tbody td { padding: 9px 8px; font-family: ui-monospace, Consolas, monospace; }
+  td.num { color: #888; width: 36px; }
+  td.op { font-weight: 700; }
+  td.r { text-align: right; }
+  td.c { text-align: center; font-family: 'Nunito', system-ui, sans-serif; font-weight: 700; }
+  td.dim { color: #888; }
+  td.ok { color: #1e8a5d; }
+  td.err { color: #c33b3b; }
+  td.empty { padding: 24px; text-align: center; color: #888; font-style: italic; }
+  .summary { margin-top: 16px; border-top: 2px solid #d9a441; padding-top: 12px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .cell { padding: 10px; border-radius: 6px; border: 1px solid #ddd; text-align: center; }
+  .cell .l { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; color: #666; }
+  .cell .v { font-size: 18pt; font-weight: 800; margin-top: 4px; }
+  .cell.emp { background: #faf3df; border-color: #d9a441; }
+  .foot { margin-top: 16px; font-size: 9pt; color: #888; text-align: center; }
+  @media screen { body { padding: 24px; max-width: 800px; margin: 0 auto; } }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="title">
+      <h1>EDINUN — Ediciones Nacionales Unidas</h1>
+      <div class="sub">Reporte académico · Juegos de Matemáticas</div>
+    </div>
+    <div class="date">${escapeHtml(dateStr)}</div>
+  </div>
+
+  <div class="fields">
+    <div class="field"><div class="l">Estudiante</div><div class="v">${escapeHtml(studentName || "—")}</div></div>
+    <div class="field"><div class="l">Categoría</div><div class="v">${escapeHtml(res.category || "—")}</div></div>
+    <div class="field"><div class="l">Tiempo total</div><div class="v">${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}</div></div>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>#</th><th>Operación</th><th class="r">Respuesta del estudiante</th>
+      <th class="r">Resultado correcto</th><th class="c">Estado</th><th class="r">Tiempo</th>
+    </tr></thead>
+    <tbody>${rows}${emptyRow}</tbody>
+  </table>
+
+  <div class="summary">
+    <div class="cell"><div class="l">Ejercicios</div><div class="v">${attemptedCount} / ${totalEx}</div></div>
+    <div class="cell"><div class="l">Correctos</div><div class="v">${res.solved}</div></div>
+    <div class="cell"><div class="l">Estrellas</div><div class="v">${res.starsEarned}</div></div>
+    <div class="cell emp"><div class="l">Precisión total</div><div class="v">${accuracy}%</div></div>
+  </div>
+
+  <div class="foot">EDINUN GAMES · Reporte generado automáticamente</div>
+
+  ${"<scr"+"ipt>"}
+    /* Esperar al render y disparar print. Tras el print, cerramos.
+       En iOS el usuario puede cancelar el sheet y la ventana queda; OK. */
+    window.addEventListener("load", function () {
+      setTimeout(function () {
+        window.print();
+        setTimeout(function () { window.close(); }, 500);
+      }, 200);
+    });
+  ${"<\/scr"+"ipt>"}
+</body>
+</html>`;
+
+  const w = window.open("", "_blank", "noopener");
+  if (!w) {
+    // Bloqueador de popups: fallback al print clásico (mejor que nada).
+    window.print();
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function ResultsScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
   const res = app.lastResult || { category: "Sumas", solved: 0, total: 3, time: 0, starsEarned: 0, log: [] };
@@ -874,7 +1008,11 @@ function ResultsScreen({ app, setApp, go }) {
 
           {/* Acciones (no se imprimen) — uniformes y en mayúsculas */}
           <div className="ed-print-hide" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button className="ed-btn ed-btn-ghost" onClick={() => window.print()} style={{ padding: "0 10px", fontSize: 13, height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+            <button
+              className="ed-btn ed-btn-ghost"
+              onClick={() => printReport({ studentName: app.studentName, res, dateStr, m, s, attemptedCount, totalEx, accuracy })}
+              style={{ padding: "0 10px", fontSize: 13, height: 44, fontWeight: 800, letterSpacing: "0.04em" }}
+            >
               IMPRIMIR REPORTE
             </button>
             <button className="ed-btn ed-btn-primary" onClick={() => go("game")} style={{ padding: "0 10px", fontSize: 13, height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>

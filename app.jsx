@@ -21,26 +21,38 @@ function useViewportSize() {
     function onChange() { setSize(readSize()); }
     window.addEventListener("resize", onChange);
     window.addEventListener("orientationchange", onChange);
+    // Solo nos interesa que `visualViewport.resize` reaccione a la URL bar
+    // mostrándose/escondiéndose. NO escuchamos `scroll` ni cambios de
+    // `scale` — esos vienen del pinch-zoom del usuario, y al recalcular
+    // la escala del lienzo durante el zoom haríamos que el lienzo se
+    // achique justo cuando el usuario quiere agrandarlo (pelea contra
+    // el zoom del navegador).
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", onChange);
-      window.visualViewport.addEventListener("scroll", onChange);
     }
     return () => {
       window.removeEventListener("resize", onChange);
       window.removeEventListener("orientationchange", onChange);
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", onChange);
-        window.visualViewport.removeEventListener("scroll", onChange);
       }
     };
   }, []);
   return size;
 }
 function readSize() {
-  const vv = (typeof window !== "undefined") ? window.visualViewport : null;
-  const vw = vv ? vv.width : window.innerWidth;
-  const vh = vv ? vv.height : window.innerHeight;
-  return { vw, vh };
+  if (typeof window === "undefined") return { vw: 0, vh: 0 };
+  const vv = window.visualViewport;
+  // Cuando el usuario hace pinch-zoom, vv.scale > 1 y vv.width/height
+  // reflejan la región visible (más pequeña). Usar esos valores haría
+  // que la escala del lienzo se reduzca al hacer zoom — exactamente lo
+  // contrario de lo que el usuario quiere. Solo confiamos en vv cuando
+  // scale ≈ 1 (sin zoom) — ahí da una lectura más fiel que innerWidth/
+  // Height en iOS Safari (descuenta correctamente la URL bar visible).
+  if (vv && Math.abs(vv.scale - 1) < 0.05) {
+    return { vw: vv.width, vh: vv.height };
+  }
+  return { vw: window.innerWidth, vh: window.innerHeight };
 }
 
 // ─────────────────────────────────────────────────────────────
