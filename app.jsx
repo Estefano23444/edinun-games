@@ -105,6 +105,13 @@ function DeviceStage({ children, variant = "cosmic" }) {
   const isPhone = minSide <= 600;
   const lockPortrait = isPhone && portrait;
 
+  // Tamaño de los glifos del fondo: equivalente al `clamp(48px, 7vmin, 110px)`
+  // que tenía el CSS, pero calculado a partir del vw/vh DEFENDIDO contra
+  // cambios de DPR. Esto evita que con ctrl+rueda del mouse los glifos
+  // crezcan más rápido que el lienzo (el lienzo se congela vía la defensa
+  // del DPR; si CSS lee el vmin actual, los glifos no se congelan y desync).
+  const glyphSize = Math.max(48, Math.min(minSide * 0.07, 110));
+
   // Debug: añadir #debug a la URL para ver lo que el navegador del
   // dispositivo está leyendo en tiempo real (vw, vh, mode, lockPortrait).
   // Útil para entender por qué no se dispara el overlay en un dispositivo
@@ -119,7 +126,7 @@ function DeviceStage({ children, variant = "cosmic" }) {
       position: "fixed", inset: 0,
       background: variant === "chalkboard" ? "#0b3a2d" : "#050214",
     }}>
-      <CosmosBg variant={variant} />
+      <CosmosBg variant={variant} glyphSize={glyphSize} />
 
       {/* Lienzo lógico 900×540 centrado y escalado.
           Posicionamos absoluto con left/top 50% + translate(-50%, -50%) ANTES

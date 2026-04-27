@@ -7,9 +7,15 @@ const { useState, useEffect, useRef, useMemo } = React;
 // Fondo cósmico + glifos matemáticos flotantes (se reusa en todas las
 // pantallas excepto la del aula en pizarra).
 // ─────────────────────────────────────────────────────────────
-function CosmosBg({ variant = "cosmic" }) {
-  // Tamaños relativos (em) a la base CSS clamp(48px, 7vmin, 110px) para que
-  // los glifos escalen con el viewport y se vean iguales en cualquier dispositivo.
+function CosmosBg({ variant = "cosmic", glyphSize }) {
+  // `glyphSize` es la fuente base de los glifos en CSS px, calculada en
+  // DeviceStage a partir del vw/vh defendido contra cambios de DPR. Si se
+  // recibe, se aplica inline y gana sobre el `clamp(48px, 7vmin, 110px)` de
+  // styles.css. Sin esto, ctrl+rueda del mouse hace que los glifos crezcan
+  // mucho más rápido que el lienzo: el lienzo está congelado pero CSS sigue
+  // leyendo el vmin actual del navegador y los glifos tocan el mínimo del
+  // clamp, mientras el navegador amplifica todo visualmente.
+  const glyphsStyle = glyphSize ? { fontSize: glyphSize + "px" } : undefined;
   if (variant === "chalkboard") {
     return (
       <div
@@ -21,7 +27,7 @@ function CosmosBg({ variant = "cosmic" }) {
           overflow: "hidden",
         }}
       >
-        <div className="ed-glyphs" style={{ color: "rgba(255,255,255,0.10)" }}>
+        <div className="ed-glyphs" style={{ color: "rgba(255,255,255,0.10)", ...glyphsStyle }}>
           <span style={{ left: "6%", top: "12%", "--rot": "-8deg" }}>√</span>
           <span style={{ left: "82%", top: "16%", "--rot": "6deg", fontSize: "0.62em" }}>π</span>
           <span style={{ left: "10%", top: "78%", "--rot": "12deg", fontSize: "0.7em" }}>∞</span>
@@ -39,7 +45,7 @@ function CosmosBg({ variant = "cosmic" }) {
   return (
     <>
       <div className="ed-cosmos" />
-      <div className="ed-glyphs">
+      <div className="ed-glyphs" style={glyphsStyle}>
         <span style={{ left: "5%", top: "10%", "--rot": "-8deg" }}>x²</span>
         <span style={{ left: "84%", top: "6%", "--rot": "6deg", fontSize: "0.78em" }}>π</span>
         <span style={{ left: "92%", top: "72%", "--rot": "-12deg", fontSize: "0.74em" }}>√</span>
