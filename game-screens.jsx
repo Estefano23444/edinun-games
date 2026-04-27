@@ -101,13 +101,14 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function verify() {
-    const joined = Array.from({ length: slots }, (_, i) => answer[i] ?? "").join("");
-    if (joined.length !== slots || joined.includes("")) {
+    const filled = Array.from({ length: slots }, (_, i) => answer[i]);
+    if (filled.some(d => d === undefined || d === "")) {
       // Faltan dígitos: feedback de error suave
       setFeedback("err");
       setTimeout(() => setFeedback(null), 600);
       return;
     }
+    const joined = filled.join("");
     const entered = parseInt(joined, 10);
     if (entered === problem.answer) {
       setFeedback("ok");
