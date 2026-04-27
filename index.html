@@ -1349,7 +1349,11 @@ function GameScreen({ app, setApp, go }) {
   const padA = Array(maxLen - aDigits.length).fill(" ").concat(aDigits);
   const padB = Array(maxLen - bDigits.length).fill(" ").concat(bDigits);
 
-  const levelOfCat = CATEGORIES.find((c) => c.id === cat)?.level || "basic";
+  // Tab activo = nivel actual de la sesión (`app.level`), NO derivado de
+  // CATEGORIES. El catálogo tiene a `div` marcado como "medium" pero en este
+  // juego mapeamos avanzado → división, así que basarse en CATEGORIES.level
+  // hacía que el tab quedara desincronizado al cambiar a Avanzado.
+  const levelOfCat = app.level || "basic";
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
