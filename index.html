@@ -1884,6 +1884,12 @@ function DeviceStage({ children, variant = "cosmic" }) {
   const isPhone = minSide <= 600;
   const lockPortrait = isPhone && portrait;
 
+  // Debug: añadir #debug a la URL para ver lo que el navegador del
+  // dispositivo está leyendo en tiempo real (vw, vh, mode, lockPortrait).
+  // Útil para entender por qué no se dispara el overlay en un dispositivo
+  // específico. Sin #debug, no se renderiza nada.
+  const debug = typeof window !== "undefined" && /(?:^|[#&])debug(?:&|$)/.test(window.location.hash || "");
+
   return (
     <div style={{
       width: "100vw", height: "100dvh",
@@ -1910,6 +1916,23 @@ function DeviceStage({ children, variant = "cosmic" }) {
       </div>
 
       {lockPortrait && <RotateLockOverlay />}
+      {debug && (
+        <div style={{
+          position: "fixed", top: 6, left: 6, zIndex: 999999,
+          background: "rgba(0,0,0,0.85)", color: "#0f0",
+          font: "11px ui-monospace,Menlo,monospace",
+          padding: "6px 8px", borderRadius: 6,
+          maxWidth: "90vw", whiteSpace: "pre",
+          pointerEvents: "none",
+        }}>
+{`vw=${vw} vh=${vh}
+min=${minSide} max=${maxSide}
+mode=${mode} portrait=${portrait}
+isPhone=${isPhone} LOCK=${lockPortrait}
+vv=${typeof window!=="undefined" && window.visualViewport ? "yes" : "no"}
+ua=${(typeof navigator!=="undefined" ? navigator.userAgent : "?").slice(0,60)}`}
+        </div>
+      )}
     </div>
   );
 }
