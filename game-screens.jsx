@@ -62,7 +62,9 @@ function GameScreen({ app, setApp, go }) {
   const [problem, setProblem] = useStateG(() => makeProblem(cat));
   const [answer, setAnswer] = useStateG([]);
   const [elapsed, setElapsed] = useStateG(0);
-  const [stars, setStars] = useStateG(app.stars || 48);
+  // Estrellas SIEMPRE empiezan en 0 al iniciar una partida — no acumulan
+  // entre rondas (regla pedida por el usuario).
+  const [stars, setStars] = useStateG(0);
   const [streak, setStreak] = useStateG(0);
   const [maxStreak, setMaxStreak] = useStateG(0);
   const [solved, setSolved] = useStateG(0);       // aciertos en la sesión
@@ -270,19 +272,23 @@ function GameScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
 
 
-      {/* Top HUD */}
+      {/* Top HUD — el centro (tabs de nivel) está absolutamente centrado en la
+          pantalla, no entre las dos columnas, para que no se desplace cuando el
+          logo es más ancho que el timer/stars de la derecha. */}
       <div style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        {/* Izq: logo limpio (sin wrapper). El cambio de nivel se hace
-            tocando los tabs Básico/Medio/Avanzado de abajo, con modal de
-            confirmación. */}
+        {/* Izq: logo (mismo tamaño que CharacterScreen para consistencia) */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <EdinunLogoMini size={56} />
+          <EdinunLogoMini size={64} />
         </div>
 
-        {/* Centro: barra de niveles — clickeable. Tocar un nivel distinto al
-            actual abre un modal de confirmación; aceptar reinicia la ronda
-            con la dificultad nueva. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 440, justifyContent: "center" }}>
+        {/* Centro: barra de niveles — clickeable, anclada al centro real de la
+            pantalla. Tocar un nivel distinto al actual abre un modal de
+            confirmación; aceptar reinicia la ronda con la dificultad nueva. */}
+        <div style={{
+          position: "absolute", left: "50%", top: "50%",
+          transform: "translate(-50%, -50%)",
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
           {[
             { id: "basic", label: "Básico", c: "#f5a623" },
             { id: "medium", label: "Medio", c: "#f5d84b" },
@@ -332,9 +338,10 @@ function GameScreen({ app, setApp, go }) {
 
       {/* Personaje compañero — lado izquierdo, elevado para no chocar con el
           numpad. Cuando hay feedback de error, muestra un bocadillo con frase
-          motivadora (`feedbackMsg`). */}
+          motivadora (`feedbackMsg`). z-index alto para mantenerse visible
+          encima del backdrop oscuro del feedback overlay. */}
       <div style={{
-        position: "absolute", left: 8, bottom: 90, width: 220,
+        position: "absolute", left: 8, bottom: 90, width: 220, zIndex: 6,
         pointerEvents: "none", textAlign: "center",
       }}>
         {/* Bocadillo motivador (visible solo en feedback de error con texto) */}
@@ -613,12 +620,15 @@ function GameScreen({ app, setApp, go }) {
       </div>
 
       {/* Feedback overlay — al acertar muestra estrellas; al fallar deja al
-          personaje hablar (bocadillo abajo a la izquierda). */}
+          personaje hablar (bocadillo abajo a la izquierda). El backdrop oscuro
+          le da protagonismo al mensaje sobre el resto del tablero. */}
       {feedback && (
         <div style={{
           position: "absolute", inset: 0, pointerEvents: "none",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           gap: 8,
+          background: "rgba(0,0,0,0.55)",
+          backdropFilter: "blur(2px)",
           animation: "ed-pop-in 0.3s",
         }}>
           <div style={{
@@ -758,10 +768,10 @@ function ResultsScreen({ app, setApp, go }) {
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-      {/* Header pantalla — logo a la derecha, volver a la izquierda */}
-      <div className="ed-print-hide" style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      {/* Header pantalla — solo el botón volver. El logo único vive dentro
+          del reporte (a la derecha) para evitar que se duplique visualmente. */}
+      <div className="ed-print-hide" style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
         <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>← Volver al inicio</button>
-        <EdinunLogoMini size={64} />
       </div>
 
       {/* Contenido central */}

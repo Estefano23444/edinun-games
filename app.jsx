@@ -123,16 +123,17 @@ function App() {
     studentName: "",
     character: "mago",
     level: "basic",
-    stars: 48,
+    stars: 0,
     sessionStart: Date.now(),
     gameSeed: 0,
   });
 
   function go(r) {
     // Al (re)entrar al juego, regeneramos la seed para que GameScreen se remonte
-    // y reinicie ronda, tiempo, racha, etc.
+    // y reinicie ronda, tiempo, racha, etc. También reseteamos las estrellas:
+    // cada partida empieza desde 0, no acumula entre rondas.
     if (r === "game") {
-      setApp((s) => ({ ...s, gameSeed: (s.gameSeed || 0) + 1 }));
+      setApp((s) => ({ ...s, gameSeed: (s.gameSeed || 0) + 1, stars: 0 }));
     }
     setRoute(r);
   }
