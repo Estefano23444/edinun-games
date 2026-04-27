@@ -214,9 +214,9 @@ function HomeScreen({ app, setApp, go }) {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               {[
-                { id: "basic", label: "Básico", grad: "linear-gradient(180deg, #ffc06e, #e4881a)", ink: "#3a2608" },
-                { id: "medium", label: "Medio", grad: "linear-gradient(180deg, #ffe97a, #d7b12a)", ink: "#3a2608" },
-                { id: "advanced", label: "Avanzado", grad: "linear-gradient(180deg, #7ab8ff, #2773d8)", ink: "#08264d" },
+                { id: "basic", label: "BÁSICO", grad: "linear-gradient(180deg, #ffc06e, #e4881a)", ink: "#3a2608" },
+                { id: "medium", label: "MEDIO", grad: "linear-gradient(180deg, #ffe97a, #d7b12a)", ink: "#3a2608" },
+                { id: "advanced", label: "AVANZADO", grad: "linear-gradient(180deg, #7ab8ff, #2773d8)", ink: "#08264d" },
               ].map((lv) => {
                 const active = level === lv.id;
                 return (
@@ -292,7 +292,7 @@ function CharacterScreen({ app, setApp, go }) {
       {/* Header — primero "Hola, X", luego logo grande a la derecha */}
       <div style={{ position: "absolute", top: 18, left: 24, right: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>
-          ← Volver
+          ← VOLVER
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 700, color: "#fce9a8", fontSize: 20, textShadow: "0 2px 6px rgba(0,0,0,0.45)" }}>

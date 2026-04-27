@@ -302,9 +302,9 @@ function GameScreen({ app, setApp, go }) {
           display: "flex", alignItems: "center", gap: 8,
         }}>
           {[
-            { id: "basic", label: "Básico", c: "#f5a623" },
-            { id: "medium", label: "Medio", c: "#f5d84b" },
-            { id: "advanced", label: "Avanzado", c: "#4fa0ff" },
+            { id: "basic", label: "BÁSICO", c: "#f5a623" },
+            { id: "medium", label: "MEDIO", c: "#f5d84b" },
+            { id: "advanced", label: "AVANZADO", c: "#4fa0ff" },
           ].map((lv) => {
             const active = lv.id === levelOfCat;
             return (
@@ -350,7 +350,10 @@ function GameScreen({ app, setApp, go }) {
 
       {/* Personaje compañero — lado izquierdo, elevado para no chocar con el
           numpad. La frase motivadora ahora aparece en el feedback central
-          (con atribución al personaje), así que el bocadillo se eliminó. */}
+          (con atribución al personaje), así que el bocadillo se eliminó.
+          Sin z-index: queda en el orden natural del DOM, por encima de los
+          glifos del fondo pero por debajo de la ecuación, numpad y botones,
+          que vienen después en el JSX. */}
       <div style={{
         position: "absolute", left: 8, bottom: 90, width: 220,
         pointerEvents: "none", textAlign: "center",
@@ -579,32 +582,33 @@ function GameScreen({ app, setApp, go }) {
         })}
       </div>
 
-      {/* Botones de acción — columna derecha, centrados verticalmente */}
+      {/* Botones de acción — columna derecha, centrados verticalmente. Todos
+          al mismo tamaño y en mayúsculas para que la columna se vea uniforme. */}
       <div style={{
         position: "absolute", right: 18, top: "50%", transform: "translateY(-50%)",
-        display: "flex", flexDirection: "column", gap: 12, width: 140,
+        display: "flex", flexDirection: "column", gap: 12, width: 150,
       }}>
         <button
           className="ed-btn ed-btn-verify"
           onClick={verify}
-          style={{ fontSize: 16, padding: "14px 10px", height: 66, fontWeight: 800, letterSpacing: "0.04em" }}
+          style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
         >
           ¡VERIFICAR!
         </button>
         <button
           className="ed-btn ed-btn-erase"
           onClick={erase}
-          style={{ fontSize: 15, padding: "12px 10px", height: 52, fontWeight: 700 }}
+          style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
         >
-          Borrar 🗑
+          BORRAR 🗑
         </button>
         <button
           className="ed-btn ed-btn-ghost"
           onClick={() => setConfirmingSurrender(true)}
           title="Terminar la ronda y ver los resultados parciales"
-          style={{ fontSize: 13, padding: "10px 8px", height: 40, fontWeight: 600 }}
+          style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
         >
-          Rendirse
+          RENDIRSE
         </button>
       </div>
 
@@ -677,11 +681,11 @@ function GameScreen({ app, setApp, go }) {
                 Vas a ver el reporte con los ejercicios que llevas resueltos hasta ahora ({attempted}/3). No podrás retomar esta ronda.
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingSurrender(false)} style={{ height: 44 }}>
-                  Seguir jugando
+                <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingSurrender(false)} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+                  SEGUIR JUGANDO
                 </button>
-                <button className="ed-btn ed-btn-primary" onClick={() => { setConfirmingSurrender(false); surrender(); }} style={{ height: 44 }}>
-                  Sí, ver resultados
+                <button className="ed-btn ed-btn-primary" onClick={() => { setConfirmingSurrender(false); surrender(); }} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+                  SÍ, VER RESULTADOS
                 </button>
               </div>
             </div>
@@ -728,16 +732,16 @@ function GameScreen({ app, setApp, go }) {
                   <button
                     className="ed-btn ed-btn-ghost"
                     onClick={() => setPendingLevel(null)}
-                    style={{ height: 44 }}
+                    style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}
                   >
-                    Cancelar
+                    CANCELAR
                   </button>
                   <button
                     className="ed-btn ed-btn-primary"
                     onClick={() => { applyLevelChange(pendingLevel); setPendingLevel(null); }}
-                    style={{ height: 44 }}
+                    style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}
                   >
-                    Sí, cambiar
+                    SÍ, CAMBIAR
                   </button>
                 </div>
               </div>
@@ -773,7 +777,7 @@ function ResultsScreen({ app, setApp, go }) {
       {/* Header pantalla — solo el botón volver. El logo único vive dentro
           del reporte (a la derecha) para evitar que se duplique visualmente. */}
       <div className="ed-print-hide" style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "flex-start", alignItems: "center" }}>
-        <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>← Volver al inicio</button>
+        <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px", fontWeight: 800, letterSpacing: "0.04em" }}>← VOLVER AL INICIO</button>
       </div>
 
       {/* Contenido central */}
@@ -891,13 +895,13 @@ function ResultsScreen({ app, setApp, go }) {
             <SummaryCell label="Precisión total" value={`${accuracy}%`} tone="#fce9a8" emphasis />
           </div>
 
-          {/* Acciones (no se imprimen) */}
+          {/* Acciones (no se imprimen) — uniformes y en mayúsculas */}
           <div className="ed-print-hide" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button className="ed-btn ed-btn-ghost" onClick={() => window.print()} style={{ padding: "10px 8px", fontSize: 13, height: 40 }}>
-              Imprimir reporte
+            <button className="ed-btn ed-btn-ghost" onClick={() => window.print()} style={{ padding: "0 10px", fontSize: 13, height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+              IMPRIMIR REPORTE
             </button>
-            <button className="ed-btn ed-btn-primary" onClick={() => go("game")} style={{ padding: "10px 8px", fontSize: 13, height: 40 }}>
-              Jugar otra ronda
+            <button className="ed-btn ed-btn-primary" onClick={() => go("game")} style={{ padding: "0 10px", fontSize: 13, height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+              JUGAR OTRA RONDA
             </button>
           </div>
         </div>
