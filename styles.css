@@ -67,17 +67,23 @@ html, body { margin: 0; padding: 0; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 input { font: inherit; }
 
+html, body {
+  /* No tocar el zoom del navegador. `overscroll-behavior: none` evita el
+     efecto rubber-band en iOS sin desactivar el pinch-zoom. */
+  overscroll-behavior: none;
+}
 body {
   font-family: var(--ed-font-ui);
   color: var(--ed-ink);
   background: #050214;
-  overflow: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* iOS: por defecto desactiva pinch-zoom cuando combina overflow:hidden +
-     position:fixed cubriendo todo el viewport. `manipulation` le dice
-     explícitamente al motor que SÍ permita pan + pinch-zoom (solo
-     desactiva el doble-tap-to-zoom, que es ruidoso en juegos). */
+  /* `manipulation` deja pan + pinch-zoom; solo deshabilita el doble-tap-to-
+     zoom, que en juegos es ruido. NO usamos `overflow: hidden` en body
+     porque iOS lo interpreta como "página fija sin zoom" cuando el
+     contenido ocupa exactamente el viewport — el pinch funciona pero
+     "rebota" o queda inestable. El wrapper de DeviceStage ya tiene su
+     propio overflow:hidden, así que no se necesita aquí. */
   touch-action: manipulation;
 }
 

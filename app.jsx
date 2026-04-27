@@ -134,11 +134,19 @@ function DeviceStage({ children, variant = "cosmic" }) {
   const debug = typeof window !== "undefined" && /(?:^|[#&])debug(?:&|$)/.test(window.location.hash || "");
 
   return (
+    // Wrapper en `position: relative`, NO `fixed`. iOS Safari maneja
+    // pésimamente el pinch-zoom sobre elementos `position: fixed`: el
+    // elemento queda anclado al layout viewport mientras el usuario panea
+    // el visual viewport, así que el contenido se "desliza" respecto al
+    // gesto y se siente inestable. Con `relative` el elemento fluye en el
+    // documento normal y la zoom del visual viewport amplifica todo de
+    // forma uniforme. Mantiene el efecto de "cubrir el viewport" porque
+    // ya lo dimensionamos con 100vw × 100dvh.
     <div style={{
       width: "100vw", height: "100dvh",
       minHeight: "-webkit-fill-available",
       overflow: "hidden",
-      position: "fixed", inset: 0,
+      position: "relative",
       background: variant === "chalkboard" ? "#0b3a2d" : "#050214",
     }}>
       <CosmosBg variant={variant} glyphSize={glyphSize} />
