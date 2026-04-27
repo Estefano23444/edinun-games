@@ -1870,19 +1870,23 @@ function DeviceStage({ children, variant = "cosmic" }) {
           flotan sobre toda la pantalla y se ven uniformes en cualquier resolución. */}
       <CosmosBg variant={variant} />
 
-      {/* Lienzo lógico 900×540 centrado y escalado */}
+      {/* Lienzo lógico 900×540 centrado y escalado.
+          Posicionamos absoluto con left/top 50% + translate(-50%, -50%) ANTES
+          de la escala, para que el centro visual del lienzo coincida con el
+          centro del viewport sin importar la relación entre tamaños.
+          (Con display:grid + placeItems:center, las pistas auto-dimensionan
+          al contenido y, cuando el lienzo > viewport, quedaba alineado a la
+          esquina superior izquierda — el bug se notaba dramáticamente en
+          mobile portrait.) */}
       <div style={{
-        position: "absolute", inset: 0,
-        display: "grid", placeItems: "center",
+        width: W, height: H,
+        position: "absolute",
+        left: "50%", top: "50%",
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        transformOrigin: "center center",
+        overflow: "hidden",
       }}>
-        <div style={{
-          width: W, height: H,
-          transform: `scale(${scale})`, transformOrigin: "center center",
-          position: "relative",
-          overflow: "hidden",
-        }}>
-          {children}
-        </div>
+        {children}
       </div>
 
       {showRotateHint && <RotateHint />}
