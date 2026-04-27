@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 EDINUN GAMES — juegos de matemáticas para estudiantes. Originado como prototipo handoff de Claude Design (claude.ai/design); el objetivo actual es llevarlo a producción soportando móvil, tablet y desktop. En móvil el diseño es horizontal pero el dispositivo se sostiene **vertical**: el usuario gira físicamente el teléfono para verlo bien (el contenido NO rota junto con la orientación del sistema).
 
-Bitácora del proyecto y decisiones tomadas: ver `MEMORY.md`.
+- **Bitácora del proyecto** y decisiones tomadas: ver `MEMORY.md`.
+- **Preferencias del usuario** (principios de usabilidad, metodología responsive, invariantes de diseño): ver `USER.md`. **Léelo antes de cualquier cambio de UI o flujo.**
+- **Reglas internas del juego** (rondas, fórmula de estrellas, accuracy): ver `.planning/game-rules.md`. Editar `verify()` o el reporte sin tener en cuenta esas invariantes rompe el log académico.
 
 ## Documentación de cambios importantes
 
@@ -33,17 +35,17 @@ Solo dos: `index.html` (idéntico a `EDINUN GAMES.html`) y `styles.css`. El HTML
 1. `EdinunLogo` / `EdinunLogoMini` (usan `assets/edinun-logo.png` directo)
 2. `CHARACTERS` catálogo + 4 SVG components (Mago/Física/Numerólogo/Geómetra) + `CharacterAvatar`
 3. `CosmosBg`, `useVisitorCount`, `HomeScreen`, `CharacterScreen`, `MenuScreen` (este último ya no está enrutado pero permanece exportado)
-4. `GameScreen`, `ResultsScreen`, `ProfileScreen` (los dos últimos no enrutados)
+4. `GameScreen`, `ResultsScreen` exportados; `ProfileScreen` existe en `game-screens.jsx` pero **no** se exporta a `window` ni se enruta — es código muerto residual.
 5. `App` shell + `DeviceStage` + `RotateHint` + `ReactDOM.createRoot().render(<App/>)`
 
 ### Archivos `.jsx` y `design-canvas.jsx` en disco
-Son la **fuente editable** del bundle inline en el HTML. El HTML no los carga en runtime, pero el flujo de trabajo es: editar el `.jsx` → re-empaquetar al HTML.
+Son la **fuente editable** del bundle inline en el HTML. El HTML no los carga en runtime, pero el flujo de trabajo es: editar el `.jsx` → re-empaquetar al HTML con el script oficial.
 
 ```bash
-# Re-empaquetar tras editar cualquier .jsx
-cat logo.jsx characters.jsx screens.jsx game-screens.jsx app.jsx > /tmp/combined.jsx
-# Reemplazar el contenido entre <script type="text/babel" data-presets="react"> y </script>
-# en index.html y "EDINUN GAMES.html" (mantenerlos idénticos)
+# Re-empaquetar tras editar cualquier .jsx (concatena los 5 fuentes en orden y
+# reemplaza el bloque <script type="text/babel"> de index.html y "EDINUN GAMES.html",
+# manteniendo ambos idénticos):
+python .planning/bundle.py
 ```
 
 `design-canvas.jsx` es residuo del prototipo Claude Design y no se usa.
@@ -55,11 +57,15 @@ Sin react-router. `App` mantiene `route` en `useState` y conmuta entre `HomeScre
 Home (nombre + nivel) → Personaje (4 personajes Mario-Kart-style, sin mención de niveles) → Game (3 rondas, ecuación protagonista CDU, resolución U→D→C drag-and-drop) → Results (printable). El **nivel** elegido en Home determina la operación en Game: `basic`→suma o resta aleatoria, `medium`→multiplicación, `advanced`→división. No hay menú de categorías ni pantalla de perfil en el flujo actual.
 
 ### Device stage (`DeviceStage`)
-Lienzo lógico fijo **900×540** (paisaje) escalado con `transform: scale()` al viewport. Clasifica por viewport en tres modos:
+Lienzo lógico fijo **900×540** (paisaje) escalado con `transform: scale()` al viewport. El fondo (`CosmosBg`) se renderiza fuera del lienzo y llena el viewport completo edge-to-edge — no hay marco de teléfono ni notch decorativo en ningún modo.
 
-- `desktop` (lado mayor ≥ 820 y lado menor ≥ 820): marco redondeado + notch decorativo, padding cómodo de 24px.
-- `tablet` (lado mayor ≥ 820 pero menor < 820): mismo marco con padding de 12px.
-- `mobile` (lado mayor < 820): sin marco, sin notch, sin padding.
+Clasifica por viewport en tres modos (sólo se usa para decidir si mostrar el rotate hint):
+
+- `desktop`: lado mayor ≥ 820 y lado menor ≥ 820.
+- `tablet`: lado mayor ≥ 820 pero lado menor < 820.
+- `mobile`: lado mayor < 820.
+
+**Centrado del lienzo (invariante crítico):** el lienzo se posiciona con `position: absolute; left:50%; top:50%; transform: translate(-50%,-50%) scale(...)`. **No** usar `display:grid; placeItems:center` — bug confirmado: cuando el viewport es más pequeño que 900×540 (mobile portrait típico), las grid tracks auto-dimensionan al contenido y el lienzo queda alineado a la esquina superior izquierda en vez de centrado, dejando el contenido fuera del viewport.
 
 **El contenido nunca rota** según orientación del dispositivo. En móvil portrait el lienzo paisaje queda letterboxed (pequeño en vertical), y aparece un hint discreto `↻ Gira tu dispositivo` (no bloqueante, descartable) para invitar al usuario a rotar el teléfono físicamente. Al rotar, el viewport pasa a landscape y el lienzo escala naturalmente al ancho.
 
@@ -76,4 +82,8 @@ Variables CSS bajo `:root` con prefijo `--ed-*` definen toda la paleta (cosmic v
 - Tras 3 aciertos guarda `lastResult` en `app` e invoca `incrementGamesCompleted()` (no-op heredado) antes de navegar a Results.
 
 ### Personajes
-SVG inline con gradientes radiales para simular volumen 3D. Catálogo `CHARACTERS` define `id`, `name`, `title`, `specialty`, `quote`, `Component`. Las descripciones **no deben mencionar niveles, álgebra ni fracciones** — son personajes estilo Mario Kart asociados a profesiones (mago, física, numerólogo, geómetra).
+PNGs (`assets/char-<id>.png`, generados con Nano Banana 500×500) renderizados con un overlay SVG de sparkles animados. La fábrica `makeCharacter(id, sparkleColor, seed)` produce los 4 componentes (`MagoCharacter`, `FisicaCharacter`, `NumerologoCharacter`, `GeometraCharacter`); `CharacterAvatar` compone el marco circular para HUD/perfil. Catálogo `CHARACTERS` define `id`, `name`, `title`, `specialty`, `quote`, `Component`. Las descripciones **no deben mencionar niveles, álgebra ni fracciones** — son personajes estilo Mario Kart asociados a profesiones (mago, física, numerólogo, geómetra).
+
+## QA responsive
+
+Antes de declarar un cambio de UI completo, capturar el flujo en al menos: 1920×1080, 1280×800, 1024×768, 768×1024, 667×375, 375×667. Procedimiento + caveats en `USER.md`. La invariante de centrado del `DeviceStage` (sección anterior) sale de esta sesión de testing — re-introducirla rompe el responsive en mobile portrait.
