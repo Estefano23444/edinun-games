@@ -48,12 +48,6 @@ Respuesta incorrecta = 0 estrellas para ese ejercicio.
 hardcodeado en 100 — ahora refleja el desempeño real (e.g. 2 aciertos de 3 →
 67 %).
 
-## Streak (racha)
-
-Se incrementa con cada acierto, se reinicia a 0 con cada error. El reporte
-final muestra `maxStreak`, no el streak final, para que un error en el último
-ejercicio no borre la racha máxima alcanzada.
-
 ## Estrellas totales en el reporte
 
 `starsEarned` en `lastResult` es la suma de estrellas ganadas **en esta

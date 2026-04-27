@@ -73,8 +73,6 @@ function GameScreen({ app, setApp, go }) {
   // Estrellas SIEMPRE empiezan en 0 al iniciar una partida — no acumulan
   // entre rondas (regla pedida por el usuario).
   const [stars, setStars] = useStateG(0);
-  const [streak, setStreak] = useStateG(0);
-  const [maxStreak, setMaxStreak] = useStateG(0);
   const [solved, setSolved] = useStateG(0);       // aciertos en la sesión
   const [attempted, setAttempted] = useStateG(0); // ejercicios intentados (correctos o no)
   const [starsSession, setStarsSession] = useStateG(0); // estrellas ganadas en la sesión actual
@@ -84,8 +82,10 @@ function GameScreen({ app, setApp, go }) {
   // Cambio de nivel desde los tabs del HUD: guarda el nivel propuesto
   // mientras se muestra el modal de confirmación. null = sin modal.
   const [pendingLevel, setPendingLevel] = useStateG(null);
-  // Modal de confirmación para rendirse y ver resultados parciales.
-  const [confirmingSurrender, setConfirmingSurrender] = useStateG(false);
+  // Modal de confirmación para salir del juego (navega a home y descarta
+  // el progreso de la ronda actual). Antes era "rendirse" → resultados
+  // parciales; el flujo se simplificó a salir directo al inicio.
+  const [confirmingExit, setConfirmingExit] = useStateG(false);
   // Log de ejercicios de la ronda — alimenta el reporte académico de
   // ResultsScreen. Cada entrada: {idx, a, b, op, correctAnswer, userAnswer,
   // isCorrect, time, earned}.
@@ -154,8 +154,6 @@ function GameScreen({ app, setApp, go }) {
 
     const newAttempted = attempted + 1;
     const newSolved = solved + (isCorrect ? 1 : 0);
-    const newStreak = isCorrect ? streak + 1 : 0;
-    const newMaxStreak = Math.max(maxStreak, newStreak);
     const newStarsSession = starsSession + earned;
     const newStarsTotal = stars + earned;
 
@@ -179,8 +177,6 @@ function GameScreen({ app, setApp, go }) {
     );
     setAttempted(newAttempted);
     setSolved(newSolved);
-    setStreak(newStreak);
-    setMaxStreak(newMaxStreak);
     setStars(newStarsTotal);
     setStarsSession(newStarsSession);
     setLog(newLog);
@@ -199,7 +195,6 @@ function GameScreen({ app, setApp, go }) {
             solved: newSolved,
             total: 3,
             time: elapsed,
-            streak: newMaxStreak,
             starsEarned: newStarsSession,
             log: newLog,
           },
@@ -242,25 +237,6 @@ function GameScreen({ app, setApp, go }) {
     setElapsed(0);
   }
 
-  // Rendirse: cierra la ronda con lo que haya hasta ahora y navega a
-  // resultados. El reporte mostrará solo los ejercicios intentados.
-  function surrender() {
-    setApp((s) => ({
-      ...s,
-      stars,
-      lastResult: {
-        category: catLabel,
-        solved,
-        total: 3,
-        time: elapsed,
-        streak: maxStreak,
-        starsEarned: starsSession,
-        log,
-        surrendered: true,
-      },
-    }));
-    go("results");
-  }
 
   function formatTime(s) {
     const m = Math.floor(s / 60);
@@ -600,15 +576,15 @@ function GameScreen({ app, setApp, go }) {
           onClick={erase}
           style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
         >
-          BORRAR 🗑
+          BORRAR
         </button>
         <button
           className="ed-btn ed-btn-ghost"
-          onClick={() => setConfirmingSurrender(true)}
-          title="Terminar la ronda y ver los resultados parciales"
+          onClick={() => setConfirmingExit(true)}
+          title="Salir al inicio"
           style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
         >
-          RENDIRSE
+          SALIR
         </button>
       </div>
 
@@ -651,12 +627,13 @@ function GameScreen({ app, setApp, go }) {
         </PortalToBody>
       )}
 
-      {/* Modal de confirmación de rendirse — vía portal para cubrir todo el
-          viewport, no solo el lienzo del DeviceStage. */}
-      {confirmingSurrender && (
+      {/* Modal de confirmación de SALIR — vía portal para cubrir todo el
+          viewport. Confirmar lleva directo a home descartando el progreso
+          de la ronda actual (no genera reporte). */}
+      {confirmingExit && (
         <PortalToBody>
           <div
-            onClick={() => setConfirmingSurrender(false)}
+            onClick={() => setConfirmingExit(false)}
             style={{
               position: "fixed", inset: 0, zIndex: 1000,
               background: "rgba(0,0,0,0.62)",
@@ -672,20 +649,20 @@ function GameScreen({ app, setApp, go }) {
               style={{ padding: 24, maxWidth: 440, textAlign: "center", boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(255,107,107,0.3)" }}
             >
               <div className="ed-label" style={{ color: "#ff8b8b", marginBottom: 6 }}>
-                Terminar ronda
+                Salir del juego
               </div>
               <h2 className="ed-h1" style={{ fontSize: 22, lineHeight: 1.15, marginBottom: 8 }}>
-                ¿Rendirte ahora?
+                ¿Volver al inicio?
               </h2>
               <p className="ed-body" style={{ marginBottom: 16, fontSize: 14 }}>
-                Vas a ver el reporte con los ejercicios que llevas resueltos hasta ahora ({attempted}/3). No podrás retomar esta ronda.
+                Vas a perder el progreso de esta ronda ({attempted}/3 ejercicios). No habrá reporte de esta sesión.
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingSurrender(false)} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+                <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingExit(false)} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
                   SEGUIR JUGANDO
                 </button>
-                <button className="ed-btn ed-btn-primary" onClick={() => { setConfirmingSurrender(false); surrender(); }} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
-                  SÍ, VER RESULTADOS
+                <button className="ed-btn ed-btn-primary" onClick={() => { setConfirmingExit(false); go("home"); }} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+                  SÍ, SALIR
                 </button>
               </div>
             </div>
@@ -763,7 +740,7 @@ function formatOp(e) {
 
 function ResultsScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
-  const res = app.lastResult || { category: "Sumas", solved: 0, total: 3, time: 0, streak: 0, starsEarned: 0, log: [] };
+  const res = app.lastResult || { category: "Sumas", solved: 0, total: 3, time: 0, starsEarned: 0, log: [] };
   const m = Math.floor(res.time / 60), s = res.time % 60;
   const totalEx = res.total || 3;
   const attemptedCount = (res.log || []).length;
@@ -891,7 +868,7 @@ function ResultsScreen({ app, setApp, go }) {
           }}>
             <SummaryCell label="Ejercicios" value={`${attemptedCount} / ${totalEx}`} />
             <SummaryCell label="Correctos" value={`${res.solved}`} tone="#2ecc8f" />
-            <SummaryCell label="Mejor racha" value={`${res.streak}`} />
+            <SummaryCell label="Estrellas" value={`${res.starsEarned}`} tone="#fce9a8" />
             <SummaryCell label="Precisión total" value={`${accuracy}%`} tone="#fce9a8" emphasis />
           </div>
 

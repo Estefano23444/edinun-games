@@ -245,6 +245,24 @@ function HomeScreen({ app, setApp, go }) {
                 );
               })}
             </div>
+            {/* Descripción del nivel seleccionado — explica brevemente qué
+                tipo de operación trabaja cada dificultad. */}
+            <div style={{
+              marginTop: 12,
+              padding: "10px 14px",
+              borderRadius: 12,
+              background: "rgba(10,6,35,0.55)",
+              border: "1px solid rgba(148,120,255,0.3)",
+              fontFamily: "var(--ed-font-ui)", fontSize: 13, lineHeight: 1.4,
+              color: "rgba(246,241,255,0.85)",
+              minHeight: 42,
+            }}>
+              {{
+                basic: "Sumas y restas con números de dos y tres cifras. Ideal para fortalecer el cálculo mental y la noción de unidades, decenas y centenas.",
+                medium: "Multiplicaciones con tablas del 2 al 12. Pone a prueba tu memoria de las tablas y la ubicación correcta de cada cifra del resultado.",
+                advanced: "Divisiones exactas con cocientes de hasta dos cifras. Practica el razonamiento inverso a la multiplicación: cuántas veces cabe un número en otro.",
+              }[level]}
+            </div>
           </div>
 
 
