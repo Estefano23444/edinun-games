@@ -2,6 +2,14 @@
 
 const { useState: useStateG, useEffect: useEffectG, useRef: useRefG, useMemo: useMemoG } = React;
 
+// Portal a <body> para sacar overlays/modales del scope del DeviceStage,
+// que aplica `transform: scale()` al lienzo 900×540. Sin esto, un
+// `position: fixed` o `absolute` con `inset: 0` solo cubre el área del
+// lienzo escalado y deja los laterales del letterboxing sin oscurecer.
+function PortalToBody({ children }) {
+  return ReactDOM.createPortal(children, document.body);
+}
+
 // ─────────────────────────────────────────────────────────────
 // Generador de problemas por categoría
 // ─────────────────────────────────────────────────────────────
@@ -341,35 +349,12 @@ function GameScreen({ app, setApp, go }) {
       </div>
 
       {/* Personaje compañero — lado izquierdo, elevado para no chocar con el
-          numpad. Cuando hay feedback de error, muestra un bocadillo con frase
-          motivadora (`feedbackMsg`). z-index alto para mantenerse visible
-          encima del backdrop oscuro del feedback overlay. */}
+          numpad. La frase motivadora ahora aparece en el feedback central
+          (con atribución al personaje), así que el bocadillo se eliminó. */}
       <div style={{
-        position: "absolute", left: 8, bottom: 90, width: 220, zIndex: 6,
+        position: "absolute", left: 8, bottom: 90, width: 220,
         pointerEvents: "none", textAlign: "center",
       }}>
-        {/* Bocadillo motivador (visible solo en feedback de error con texto) */}
-        {feedback === "err" && feedbackMsg && (
-          <div style={{
-            position: "absolute", left: 160, bottom: 150,
-            background: "rgba(255,255,255,0.96)",
-            color: "#1a3a2d",
-            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 13,
-            padding: "8px 14px", borderRadius: 16,
-            maxWidth: 220, lineHeight: 1.25,
-            boxShadow: "0 8px 22px rgba(0,0,0,0.35), 0 0 0 2px rgba(242,194,96,0.55)",
-            animation: "ed-pop-in 0.25s",
-          }}>
-            <div style={{
-              position: "absolute", left: -8, bottom: 14,
-              width: 0, height: 0,
-              borderTop: "8px solid transparent",
-              borderBottom: "8px solid transparent",
-              borderRight: "10px solid rgba(255,255,255,0.96)",
-            }} />
-            {feedbackMsg}
-          </div>
-        )}
         <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
           <div style={{
             position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
@@ -623,128 +608,141 @@ function GameScreen({ app, setApp, go }) {
         </button>
       </div>
 
-      {/* Feedback overlay — al acertar muestra estrellas; al fallar deja al
-          personaje hablar (bocadillo abajo a la izquierda). El backdrop oscuro
-          le da protagonismo al mensaje sobre el resto del tablero. */}
+      {/* Feedback overlay — renderizado vía Portal a <body> para que el
+          backdrop cubra TODO el viewport (incluidos los laterales fuera del
+          lienzo 900×540 del DeviceStage). */}
       {feedback && (
-        <div style={{
-          position: "absolute", inset: 0, pointerEvents: "none",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          gap: 8,
-          background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(2px)",
-          animation: "ed-pop-in 0.3s",
-        }}>
+        <PortalToBody>
           <div style={{
-            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 72,
-            color: feedback === "ok" ? "#2ecc8f" : "#ff6b6b",
-            textShadow: "0 4px 0 rgba(0,0,0,0.35), 0 0 40px currentColor",
+            position: "fixed", inset: 0, zIndex: 1000,
+            pointerEvents: "none",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 14,
+            background: "rgba(0,0,0,0.62)",
+            backdropFilter: "blur(3px)",
+            animation: "ed-pop-in 0.3s",
           }}>
-            {feedback === "ok" ? "¡EXCELENTE!" : "¡UPS!"}
-          </div>
-          {feedback === "ok" && feedbackMsg && (
             <div style={{
-              fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 28,
-              color: "#fce9a8",
-              background: "rgba(0,0,0,0.5)",
-              padding: "6px 22px", borderRadius: 999,
-              textShadow: "0 2px 6px rgba(0,0,0,0.6)",
+              fontFamily: "'Fredoka','Baloo 2',system-ui,sans-serif",
+              fontWeight: 700, fontSize: "clamp(60px, 11vmin, 120px)",
+              color: feedback === "ok" ? "#2ecc8f" : "#ff6b6b",
+              textShadow: "0 4px 0 rgba(0,0,0,0.45), 0 0 60px currentColor",
             }}>
-              {feedbackMsg}
+              {feedback === "ok" ? "¡EXCELENTE!" : "¡UPS!"}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Modal de confirmación de rendirse */}
-      {confirmingSurrender && (
-        <div
-          onClick={() => setConfirmingSurrender(false)}
-          style={{
-            position: "absolute", inset: 0, zIndex: 50,
-            background: "rgba(0,0,0,0.55)",
-            backdropFilter: "blur(4px)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            animation: "ed-pop-in 0.18s",
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="ed-card"
-            style={{ padding: 24, maxWidth: 440, textAlign: "center", boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(255,107,107,0.3)" }}
-          >
-            <div className="ed-label" style={{ color: "#ff8b8b", marginBottom: 6 }}>
-              Terminar ronda
-            </div>
-            <h2 className="ed-h1" style={{ fontSize: 22, lineHeight: 1.15, marginBottom: 8 }}>
-              ¿Rendirte ahora?
-            </h2>
-            <p className="ed-body" style={{ marginBottom: 16, fontSize: 14 }}>
-              Vas a ver el reporte con los ejercicios que llevas resueltos hasta ahora ({attempted}/3). No podrás retomar esta ronda.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingSurrender(false)} style={{ height: 44 }}>
-                Seguir jugando
-              </button>
-              <button className="ed-btn ed-btn-primary" onClick={() => { setConfirmingSurrender(false); surrender(); }} style={{ height: 44 }}>
-                Sí, ver resultados
-              </button>
-            </div>
+            {feedbackMsg && (
+              <div style={{
+                fontFamily: "'Fredoka','Baloo 2',system-ui,sans-serif",
+                fontWeight: 700, fontSize: "clamp(18px, 2.6vmin, 30px)",
+                color: feedback === "ok" ? "#fce9a8" : "#fff",
+                background: "rgba(0,0,0,0.55)",
+                padding: "8px 26px", borderRadius: 999,
+                textShadow: "0 2px 6px rgba(0,0,0,0.6)",
+                textAlign: "center", maxWidth: "80vw",
+              }}>
+                {feedback === "ok" ? feedbackMsg : `${feedbackMsg} — ${char.name}`}
+              </div>
+            )}
           </div>
-        </div>
+        </PortalToBody>
       )}
 
-      {/* Modal de confirmación de cambio de nivel desde los tabs */}
-      {pendingLevel && (() => {
-        const labels = { basic: "Básico", medium: "Medio", advanced: "Avanzado" };
-        const colors = { basic: "#f5a623", medium: "#f5d84b", advanced: "#4fa0ff" };
-        return (
+      {/* Modal de confirmación de rendirse — vía portal para cubrir todo el
+          viewport, no solo el lienzo del DeviceStage. */}
+      {confirmingSurrender && (
+        <PortalToBody>
           <div
-            onClick={() => setPendingLevel(null)}
+            onClick={() => setConfirmingSurrender(false)}
             style={{
-              position: "absolute", inset: 0, zIndex: 50,
-              background: "rgba(0,0,0,0.55)",
+              position: "fixed", inset: 0, zIndex: 1000,
+              background: "rgba(0,0,0,0.62)",
               backdropFilter: "blur(4px)",
               display: "flex", alignItems: "center", justifyContent: "center",
               animation: "ed-pop-in 0.18s",
+              padding: 16,
             }}
           >
             <div
               onClick={(e) => e.stopPropagation()}
               className="ed-card"
-              style={{
-                padding: 24, maxWidth: 440, textAlign: "center",
-                boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(242,194,96,0.35)",
-              }}
+              style={{ padding: 24, maxWidth: 440, textAlign: "center", boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(255,107,107,0.3)" }}
             >
-              <div className="ed-label" style={{ color: "#fce9a8", marginBottom: 6 }}>
-                Cambiar dificultad
+              <div className="ed-label" style={{ color: "#ff8b8b", marginBottom: 6 }}>
+                Terminar ronda
               </div>
               <h2 className="ed-h1" style={{ fontSize: 22, lineHeight: 1.15, marginBottom: 8 }}>
-                ¿Cambiar a <span style={{ color: colors[pendingLevel] }}>{labels[pendingLevel]}</span>?
+                ¿Rendirte ahora?
               </h2>
               <p className="ed-body" style={{ marginBottom: 16, fontSize: 14 }}>
-                Vas a reiniciar la ronda actual. Perderás el progreso de los
-                ejercicios resueltos hasta ahora en esta sesión.
+                Vas a ver el reporte con los ejercicios que llevas resueltos hasta ahora ({attempted}/3). No podrás retomar esta ronda.
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <button
-                  className="ed-btn ed-btn-ghost"
-                  onClick={() => setPendingLevel(null)}
-                  style={{ height: 44 }}
-                >
-                  Cancelar
+                <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingSurrender(false)} style={{ height: 44 }}>
+                  Seguir jugando
                 </button>
-                <button
-                  className="ed-btn ed-btn-primary"
-                  onClick={() => { applyLevelChange(pendingLevel); setPendingLevel(null); }}
-                  style={{ height: 44 }}
-                >
-                  Sí, cambiar
+                <button className="ed-btn ed-btn-primary" onClick={() => { setConfirmingSurrender(false); surrender(); }} style={{ height: 44 }}>
+                  Sí, ver resultados
                 </button>
               </div>
             </div>
           </div>
+        </PortalToBody>
+      )}
+
+      {/* Modal de confirmación de cambio de nivel desde los tabs — vía portal */}
+      {pendingLevel && (() => {
+        const labels = { basic: "Básico", medium: "Medio", advanced: "Avanzado" };
+        const colors = { basic: "#f5a623", medium: "#f5d84b", advanced: "#4fa0ff" };
+        return (
+          <PortalToBody>
+            <div
+              onClick={() => setPendingLevel(null)}
+              style={{
+                position: "fixed", inset: 0, zIndex: 1000,
+                background: "rgba(0,0,0,0.62)",
+                backdropFilter: "blur(4px)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                animation: "ed-pop-in 0.18s",
+                padding: 16,
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="ed-card"
+                style={{
+                  padding: 24, maxWidth: 440, textAlign: "center",
+                  boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(242,194,96,0.35)",
+                }}
+              >
+                <div className="ed-label" style={{ color: "#fce9a8", marginBottom: 6 }}>
+                  Cambiar dificultad
+                </div>
+                <h2 className="ed-h1" style={{ fontSize: 22, lineHeight: 1.15, marginBottom: 8 }}>
+                  ¿Cambiar a <span style={{ color: colors[pendingLevel] }}>{labels[pendingLevel]}</span>?
+                </h2>
+                <p className="ed-body" style={{ marginBottom: 16, fontSize: 14 }}>
+                  Vas a reiniciar la ronda actual. Perderás el progreso de los
+                  ejercicios resueltos hasta ahora en esta sesión.
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <button
+                    className="ed-btn ed-btn-ghost"
+                    onClick={() => setPendingLevel(null)}
+                    style={{ height: 44 }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="ed-btn ed-btn-primary"
+                    onClick={() => { applyLevelChange(pendingLevel); setPendingLevel(null); }}
+                    style={{ height: 44 }}
+                  >
+                    Sí, cambiar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </PortalToBody>
         );
       })()}
     </div>
