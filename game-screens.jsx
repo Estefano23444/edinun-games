@@ -71,6 +71,9 @@ function GameScreen({ app, setApp, go }) {
   const [feedback, setFeedback] = useStateG(null); // 'ok' | 'err' | null
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
   const [hintOn, setHintOn] = useStateG(false);
+  // Cambio de nivel desde los tabs del HUD: guarda el nivel propuesto
+  // mientras se muestra el modal de confirmación. null = sin modal.
+  const [pendingLevel, setPendingLevel] = useStateG(null);
 
   const slots = digits(problem.answer).length;
   const started = useRefG(Date.now());
@@ -179,6 +182,34 @@ function GameScreen({ app, setApp, go }) {
     }, wait);
   }
 
+  // Aplica un cambio de nivel desde los tabs: deriva nueva categoría,
+  // regenera problema y resetea ronda (intentos/aciertos/cronómetro).
+  // No navega — sigue en la pantalla de juego.
+  function applyLevelChange(newLevel) {
+    let catId = "suma", catLabel = "Sumas";
+    if (newLevel === "basic") {
+      const pick = Math.random() < 0.5 ? ["suma", "Sumas"] : ["resta", "Restas"];
+      catId = pick[0]; catLabel = pick[1];
+    } else if (newLevel === "medium") {
+      catId = "mult"; catLabel = "Multiplicaciones";
+    } else if (newLevel === "advanced") {
+      catId = "div"; catLabel = "Divisiones";
+    }
+    setApp((s) => ({ ...s, level: newLevel, currentCategory: catId, currentCatLabel: catLabel }));
+    setProblem(makeProblem(catId));
+    setAnswer([]);
+    setSolved(0);
+    setAttempted(0);
+    setStreak(0);
+    setMaxStreak(0);
+    setStarsSession(0);
+    setFeedback(null);
+    setFeedbackMsg("");
+    started.current = Date.now();
+    exerciseStart.current = Date.now();
+    setElapsed(0);
+  }
+
   function formatTime(s) {
     const m = Math.floor(s / 60);
     const ss = s % 60;
@@ -199,30 +230,16 @@ function GameScreen({ app, setApp, go }) {
 
       {/* Top HUD */}
       <div style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        {/* Izq: logo grande + back directo a home (cambiar de nivel).
-            El logo va sobre un backdrop opaco para que los glifos del
-            fondo (√, π, ∞...) no se vean transparentando detrás. */}
+        {/* Izq: logo limpio (sin wrapper). El cambio de nivel se hace
+            tocando los tabs Básico/Medio/Avanzado de abajo, con modal de
+            confirmación. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            className="ed-btn ed-btn-ghost"
-            onClick={() => go("home")}
-            title="Cambiar de nivel"
-            style={{ padding: "6px 10px", fontSize: 13 }}
-          >
-            ← Cambiar nivel
-          </button>
-          <div style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(11,58,45,0.92)",
-            borderRadius: 14,
-            padding: "4px 10px",
-            boxShadow: "0 4px 14px rgba(0,0,0,0.35), 0 0 0 1px rgba(242,194,96,0.35)",
-          }}>
-            <EdinunLogoMini size={56} />
-          </div>
+          <EdinunLogoMini size={56} />
         </div>
 
-        {/* Centro: barra de niveles */}
+        {/* Centro: barra de niveles — clickeable. Tocar un nivel distinto al
+            actual abre un modal de confirmación; aceptar reinicia la ronda
+            con la dificultad nueva. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, maxWidth: 440, justifyContent: "center" }}>
           {[
             { id: "basic", label: "Básico", c: "#f5a623" },
@@ -231,16 +248,23 @@ function GameScreen({ app, setApp, go }) {
           ].map((lv) => {
             const active = lv.id === levelOfCat;
             return (
-              <div key={lv.id} style={{
-                padding: "4px 12px", borderRadius: 999,
-                background: active ? lv.c : "rgba(255,255,255,0.15)",
-                color: active ? "#0b3a2d" : "rgba(255,255,255,0.7)",
-                fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 12,
-                border: active ? `2px solid ${lv.c}` : "2px solid transparent",
-                boxShadow: active ? `0 0 14px ${lv.c}88` : "none",
-              }}>
+              <button
+                key={lv.id}
+                onClick={() => { if (!active) setPendingLevel(lv.id); }}
+                disabled={active}
+                style={{
+                  padding: "6px 14px", borderRadius: 999,
+                  background: active ? lv.c : "rgba(255,255,255,0.15)",
+                  color: active ? "#0b3a2d" : "rgba(255,255,255,0.85)",
+                  fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 13,
+                  border: active ? `2px solid ${lv.c}` : "2px solid transparent",
+                  boxShadow: active ? `0 0 14px ${lv.c}88` : "none",
+                  cursor: active ? "default" : "pointer",
+                  transition: "background 0.15s ease, transform 0.1s ease",
+                }}
+              >
                 {lv.label}
-              </div>
+              </button>
             );
           })}
         </div>
@@ -264,11 +288,11 @@ function GameScreen({ app, setApp, go }) {
         </div>
       </div>
 
-      {/* Personaje compañero — esquina inferior izquierda, GRANDE.
-          Cuando hay feedback de error, muestra un bocadillo con frase motivadora
-          (las frases las arma `verify()` en feedbackMsg). */}
+      {/* Personaje compañero — lado izquierdo, elevado para no chocar con el
+          numpad. Cuando hay feedback de error, muestra un bocadillo con frase
+          motivadora (`feedbackMsg`). */}
       <div style={{
-        position: "absolute", left: 8, bottom: 4, width: 220,
+        position: "absolute", left: 8, bottom: 90, width: 220,
         pointerEvents: "none", textAlign: "center",
       }}>
         {/* Bocadillo motivador (visible solo en feedback de error con texto) */}
@@ -567,6 +591,60 @@ function GameScreen({ app, setApp, go }) {
           )}
         </div>
       )}
+
+      {/* Modal de confirmación de cambio de nivel desde los tabs */}
+      {pendingLevel && (() => {
+        const labels = { basic: "Básico", medium: "Medio", advanced: "Avanzado" };
+        const colors = { basic: "#f5a623", medium: "#f5d84b", advanced: "#4fa0ff" };
+        return (
+          <div
+            onClick={() => setPendingLevel(null)}
+            style={{
+              position: "absolute", inset: 0, zIndex: 50,
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              animation: "ed-pop-in 0.18s",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="ed-card"
+              style={{
+                padding: 24, maxWidth: 440, textAlign: "center",
+                boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(242,194,96,0.35)",
+              }}
+            >
+              <div className="ed-label" style={{ color: "#fce9a8", marginBottom: 6 }}>
+                Cambiar dificultad
+              </div>
+              <h2 className="ed-h1" style={{ fontSize: 22, lineHeight: 1.15, marginBottom: 8 }}>
+                ¿Cambiar a <span style={{ color: colors[pendingLevel] }}>{labels[pendingLevel]}</span>?
+              </h2>
+              <p className="ed-body" style={{ marginBottom: 16, fontSize: 14 }}>
+                Vas a reiniciar la ronda actual. Perderás el progreso de los
+                ejercicios resueltos hasta ahora en esta sesión.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <button
+                  className="ed-btn ed-btn-ghost"
+                  onClick={() => setPendingLevel(null)}
+                  style={{ height: 44 }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="ed-btn ed-btn-primary"
+                  onClick={() => { applyLevelChange(pendingLevel); setPendingLevel(null); }}
+                  style={{ height: 44 }}
+                >
+                  Sí, cambiar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
