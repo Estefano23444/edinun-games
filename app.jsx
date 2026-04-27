@@ -65,11 +65,13 @@ function DeviceStage({ children, variant = "cosmic" }) {
   const scale = Math.max(Math.min(vw / W, vh / H), 0.15);
 
   // Detección de teléfono independiente del modo: cualquier dispositivo con
-  // lado menor ≤ 500 CSS-px es un teléfono (incluye Pro Max, Plus, Pixel XL,
-  // etc.). Tablets en portrait (iPad ~768 ancho) NO entran — son usables
-  // letterboxed. Solo se bloquea rotación cuando es teléfono Y está en
-  // portrait — el lienzo paisaje queda tan chico que no se puede jugar.
-  const isPhone = minSide <= 500;
+  // lado menor ≤ 600 CSS-px es un teléfono. Cubre todos los teléfonos
+  // actuales (iPhone SE 320 → S25 Ultra/Pro Max ~432) con margen para
+  // modelos futuros más anchos. La menor tablet (iPad mini 744) queda
+  // bien por encima, así que no se rompe el caso "tablet portrait usable
+  // letterboxed". Solo bloqueamos cuando teléfono Y portrait — el lienzo
+  // paisaje queda demasiado pequeño para jugar.
+  const isPhone = minSide <= 600;
   const lockPortrait = isPhone && portrait;
 
   return (
