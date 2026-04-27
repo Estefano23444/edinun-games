@@ -1157,6 +1157,12 @@ function GameScreen({ app, setApp, go }) {
   // Cambio de nivel desde los tabs del HUD: guarda el nivel propuesto
   // mientras se muestra el modal de confirmación. null = sin modal.
   const [pendingLevel, setPendingLevel] = useStateG(null);
+  // Modal de confirmación para rendirse y ver resultados parciales.
+  const [confirmingSurrender, setConfirmingSurrender] = useStateG(false);
+  // Log de ejercicios de la ronda — alimenta el reporte académico de
+  // ResultsScreen. Cada entrada: {idx, a, b, op, correctAnswer, userAnswer,
+  // isCorrect, time, earned}.
+  const [log, setLog] = useStateG([]);
 
   const slots = digits(problem.answer).length;
   const started = useRefG(Date.now());
@@ -1226,6 +1232,19 @@ function GameScreen({ app, setApp, go }) {
     const newStarsSession = starsSession + earned;
     const newStarsTotal = stars + earned;
 
+    const entry = {
+      idx: newAttempted,
+      a: problem.a,
+      b: problem.b,
+      op: problem.op,
+      correctAnswer: problem.answer,
+      userAnswer: entered,
+      isCorrect,
+      time: exerciseSec,
+      earned,
+    };
+    const newLog = [...log, entry];
+
     setFeedback(isCorrect ? "ok" : "err");
     setFeedbackMsg(isCorrect
       ? `+${earned} ⭐`
@@ -1237,6 +1256,7 @@ function GameScreen({ app, setApp, go }) {
     setMaxStreak(newMaxStreak);
     setStars(newStarsTotal);
     setStarsSession(newStarsSession);
+    setLog(newLog);
 
     const wait = isCorrect ? 950 : 1200;
     setTimeout(() => {
@@ -1254,6 +1274,7 @@ function GameScreen({ app, setApp, go }) {
             time: elapsed,
             streak: newMaxStreak,
             starsEarned: newStarsSession,
+            log: newLog,
           },
         }));
         window.incrementGamesCompleted && window.incrementGamesCompleted();
@@ -1286,11 +1307,32 @@ function GameScreen({ app, setApp, go }) {
     setStreak(0);
     setMaxStreak(0);
     setStarsSession(0);
+    setLog([]);
     setFeedback(null);
     setFeedbackMsg("");
     started.current = Date.now();
     exerciseStart.current = Date.now();
     setElapsed(0);
+  }
+
+  // Rendirse: cierra la ronda con lo que haya hasta ahora y navega a
+  // resultados. El reporte mostrará solo los ejercicios intentados.
+  function surrender() {
+    setApp((s) => ({
+      ...s,
+      stars,
+      lastResult: {
+        category: catLabel,
+        solved,
+        total: 3,
+        time: elapsed,
+        streak: maxStreak,
+        starsEarned: starsSession,
+        log,
+        surrendered: true,
+      },
+    }));
+    go("results");
   }
 
   function formatTime(s) {
@@ -1643,6 +1685,14 @@ function GameScreen({ app, setApp, go }) {
         >
           Borrar 🗑
         </button>
+        <button
+          className="ed-btn ed-btn-ghost"
+          onClick={() => setConfirmingSurrender(true)}
+          title="Terminar la ronda y ver los resultados parciales"
+          style={{ fontSize: 13, padding: "10px 8px", height: 40, fontWeight: 600 }}
+        >
+          Rendirse
+        </button>
       </div>
 
       {/* Feedback overlay — al acertar muestra estrellas; al fallar deja al
@@ -1672,6 +1722,44 @@ function GameScreen({ app, setApp, go }) {
               {feedbackMsg}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de confirmación de rendirse */}
+      {confirmingSurrender && (
+        <div
+          onClick={() => setConfirmingSurrender(false)}
+          style={{
+            position: "absolute", inset: 0, zIndex: 50,
+            background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            animation: "ed-pop-in 0.18s",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="ed-card"
+            style={{ padding: 24, maxWidth: 440, textAlign: "center", boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(255,107,107,0.3)" }}
+          >
+            <div className="ed-label" style={{ color: "#ff8b8b", marginBottom: 6 }}>
+              Terminar ronda
+            </div>
+            <h2 className="ed-h1" style={{ fontSize: 22, lineHeight: 1.15, marginBottom: 8 }}>
+              ¿Rendirte ahora?
+            </h2>
+            <p className="ed-body" style={{ marginBottom: 16, fontSize: 14 }}>
+              Vas a ver el reporte con los ejercicios que llevas resueltos hasta ahora ({attempted}/3). No podrás retomar esta ronda.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingSurrender(false)} style={{ height: 44 }}>
+                Seguir jugando
+              </button>
+              <button className="ed-btn ed-btn-primary" onClick={() => { setConfirmingSurrender(false); surrender(); }} style={{ height: 44 }}>
+                Sí, ver resultados
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1735,125 +1823,184 @@ function GameScreen({ app, setApp, go }) {
 // ─────────────────────────────────────────────────────────────
 // PANTALLA DE RESULTADOS
 // ─────────────────────────────────────────────────────────────
+// Formatea una operación de ejercicio sin emojis ni signos UI: "23 + 45".
+function formatOp(e) {
+  return `${e.a} ${e.op} ${e.b}`;
+}
+
 function ResultsScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
-  const res = app.lastResult || { category: "Sumas", solved: 0, total: 3, time: 0, streak: 0, starsEarned: 0 };
+  const res = app.lastResult || { category: "Sumas", solved: 0, total: 3, time: 0, streak: 0, starsEarned: 0, log: [] };
   const m = Math.floor(res.time / 60), s = res.time % 60;
   const totalEx = res.total || 3;
-  const accuracy = totalEx > 0 ? Math.round((res.solved / totalEx) * 100) : 0;
+  const attemptedCount = (res.log || []).length;
+  // Precisión sobre los ejercicios realmente intentados (si se rindió a mitad,
+  // no penaliza con los no intentados como si fueran fallos).
+  const accuracy = attemptedCount > 0 ? Math.round((res.solved / attemptedCount) * 100) : 0;
+  const dateStr = new Date().toLocaleDateString("es-EC", { year: "numeric", month: "long", day: "numeric" });
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-
-
-      {/* Confetti simulado */}
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-        {Array.from({ length: 24 }).map((_, i) => {
-          const colors = ["#fce9a8", "#4fd8ff", "#ff5fb3", "#7bf5c4", "#f5a623"];
-          return (
-            <div key={i} style={{
-              position: "absolute",
-              left: `${(i * 37) % 100}%`,
-              top: `-20px`,
-              width: 8, height: 12,
-              background: colors[i % 5],
-              borderRadius: 2,
-              animation: `ed-confetti ${3 + (i % 3)}s linear ${i * 0.2}s infinite`,
-            }} />
-          );
-        })}
-      </div>
-      <style>{`
-        @keyframes ed-confetti {
-          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-          100% { transform: translateY(100vh) rotate(720deg); opacity: 0.4; }
-        }
-      `}</style>
-
-      {/* Header — logo grande centrado-derecha */}
-      <div style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>← Volver</button>
+      {/* Header pantalla — logo a la derecha, volver a la izquierda */}
+      <div className="ed-print-hide" style={{ position: "absolute", top: 14, left: 24, right: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button className="ed-btn ed-btn-ghost" onClick={() => go("home")} style={{ padding: "8px 14px" }}>← Volver al inicio</button>
         <EdinunLogoMini size={64} />
       </div>
 
       {/* Contenido central */}
       <div style={{
-        position: "absolute", inset: "60px 40px 20px 40px",
-        display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 32, alignItems: "center",
+        position: "absolute", inset: "70px 32px 20px 32px",
+        display: "grid", gridTemplateColumns: "0.85fr 1.4fr", gap: 24, alignItems: "stretch",
       }}>
-        {/* Izq: personaje celebrando */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
+        {/* Izq: personaje + saludo (fuera del área imprimible) */}
+        <div className="ed-print-hide" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <div style={{
-            position: "absolute", top: -10,
-            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 52,
+            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 36,
             background: "linear-gradient(180deg, #fce9a8, #d9a441)",
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-            textShadow: "0 0 20px rgba(242,194,96,0.4)",
+            lineHeight: 1, marginBottom: 4,
           }}>
-            ¡VICTORIA!
+            {res.surrendered ? "Sesión terminada" : "¡Ronda completa!"}
           </div>
-          <div style={{ marginTop: 50 }}>
-            <char.Component size={220} />
-          </div>
-          <div style={{ marginTop: 8, textAlign: "center" }}>
-            <div className="ed-body" style={{ fontStyle: "italic", maxWidth: 280 }}>
-              "¡{app.studentName}, superaste la ronda con {res.streak} respuestas seguidas!" — {char.name}
-            </div>
+          <char.Component size={180} />
+          <div className="ed-body" style={{ fontStyle: "italic", textAlign: "center", maxWidth: 240, fontSize: 13 }}>
+            "{app.studentName}, lograste {res.solved} de {totalEx} ejercicios."
+            <div style={{ marginTop: 4, color: "var(--ed-ink-soft)", fontSize: 12 }}>— {char.name}</div>
           </div>
         </div>
 
-        {/* Der: tarjeta de resultados */}
-        <div className="ed-card ed-card-glow ed-print-area" style={{ padding: 18 }}>
-          {/* Encabezado imprimible (solo visible en papel) */}
-          <div className="ed-print-only" style={{ borderBottom: "2px solid #111", paddingBottom: 10, marginBottom: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 800, fontSize: 22, letterSpacing: 2 }}>EDINUN</div>
-              <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 12 }}>{new Date().toLocaleDateString("es-EC", { year: "numeric", month: "long", day: "numeric" })}</div>
-            </div>
-            <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 11, marginTop: 4, letterSpacing: 1 }}>REPORTE DE SESIÓN · MATEMÁTICAS</div>
-          </div>
-          <div className="ed-label" style={{ color: "#4fd8ff", marginBottom: 2, fontSize: 10 }}>
-            Reporte de la sesión · {res.category}
-          </div>
-          <h2 className="ed-h1" style={{ fontSize: 22, marginBottom: 12, lineHeight: 1.1 }}>
-            Resultados de <span style={{ color: "#fce9a8" }}>{app.studentName}</span>
-          </h2>
-
-          {/* Stats grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-            <Stat label="Respuestas correctas" value={`${res.solved}/${res.total || 3}`} tone="#2ecc8f" />
-            <Stat label="Tiempo total" value={`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`} tone="#4fd8ff" />
-            <Stat label="Precisión" value={`${accuracy}%`} tone="#fce9a8" />
-            <Stat label="Mejor racha" value={`${res.streak}🔥`} tone="#ff5fb3" />
-          </div>
-
-          {/* Estrellas ganadas */}
+        {/* Der: REPORTE ACADÉMICO (área imprimible) */}
+        <div className="ed-card ed-print-area" style={{ padding: 16, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+          {/* Encabezado del reporte: logo + título institucional */}
           <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "8px 12px", borderRadius: 12,
-            background: "linear-gradient(90deg, rgba(242,194,96,0.15), rgba(242,194,96,0.05))",
-            border: "1px solid rgba(242,194,96,0.4)",
-            marginBottom: 10,
+            display: "flex", alignItems: "center", gap: 14,
+            borderBottom: "2px solid rgba(242,194,96,0.45)",
+            paddingBottom: 10, marginBottom: 12,
           }}>
-            <div>
-              <div className="ed-label" style={{ color: "#fce9a8", fontSize: 10 }}>Estrellas ganadas</div>
-              <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 22, color: "#fce9a8", lineHeight: 1 }}>
-                +{res.starsEarned} ⭐
+            <EdinunLogoMini size={56} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 18, letterSpacing: "0.04em", lineHeight: 1.1 }}>
+                EDINUN — Ediciones Nacionales Unidas
+              </div>
+              <div style={{ fontFamily: "var(--ed-font-ui)", fontSize: 11, color: "var(--ed-ink-soft)", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 2 }}>
+                Reporte académico · Juegos de Matemáticas
               </div>
             </div>
-            <div style={{ fontSize: 34 }}>🏆</div>
+            <div style={{ fontFamily: "var(--ed-font-mono)", fontSize: 11, color: "var(--ed-ink-dim)", textAlign: "right" }}>
+              {dateStr}
+            </div>
           </div>
 
-          {/* Acciones */}
-          <div className="ed-print-hide" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button className="ed-btn ed-btn-ghost" onClick={() => window.print()} style={{ padding: "10px 8px", fontSize: 13, height: 42 }}>
-              🖨 Imprimir reporte
+          {/* Datos del estudiante */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+            fontFamily: "var(--ed-font-ui)", fontSize: 12, marginBottom: 10,
+          }}>
+            <ReportField label="Estudiante" value={app.studentName || "—"} />
+            <ReportField label="Categoría" value={res.category} />
+            <ReportField label="Tiempo total" value={`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`} />
+          </div>
+
+          {/* Tabla de ejercicios */}
+          <div style={{ flex: 1, minHeight: 0, overflow: "auto", marginBottom: 10 }}>
+            <table style={{
+              width: "100%", borderCollapse: "collapse",
+              fontFamily: "var(--ed-font-ui)", fontSize: 12,
+            }}>
+              <thead>
+                <tr style={{
+                  fontFamily: "var(--ed-font-ui)", fontWeight: 700, fontSize: 10,
+                  letterSpacing: "0.08em", textTransform: "uppercase",
+                  color: "var(--ed-ink-dim)",
+                  borderBottom: "1px solid rgba(148,120,255,0.3)",
+                }}>
+                  <th style={{ textAlign: "left", padding: "6px 8px", width: 36 }}>#</th>
+                  <th style={{ textAlign: "left", padding: "6px 8px" }}>Operación</th>
+                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Respuesta del estudiante</th>
+                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Resultado correcto</th>
+                  <th style={{ textAlign: "center", padding: "6px 8px" }}>Estado</th>
+                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Tiempo</th>
+                </tr>
+              </thead>
+              <tbody style={{ fontFamily: "var(--ed-font-mono)" }}>
+                {(res.log || []).map((e) => (
+                  <tr key={e.idx} style={{ borderBottom: "1px solid rgba(148,120,255,0.18)" }}>
+                    <td style={{ padding: "8px 8px", color: "var(--ed-ink-soft)" }}>{e.idx}</td>
+                    <td style={{ padding: "8px 8px", fontWeight: 600 }}>{formatOp(e)}</td>
+                    <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.userAnswer}</td>
+                    <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.correctAnswer}</td>
+                    <td style={{
+                      padding: "8px 8px", textAlign: "center", fontFamily: "var(--ed-font-display)",
+                      fontWeight: 700, color: e.isCorrect ? "#2ecc8f" : "#ff6b6b",
+                    }}>
+                      {e.isCorrect ? "Correcto" : "Incorrecto"}
+                    </td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", color: "var(--ed-ink-dim)" }}>{e.time}s</td>
+                  </tr>
+                ))}
+                {(res.log || []).length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "16px 8px", textAlign: "center", color: "var(--ed-ink-soft)", fontStyle: "italic" }}>
+                      No se registraron ejercicios en esta sesión.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Resumen final — precisión como total */}
+          <div style={{
+            borderTop: "2px solid rgba(242,194,96,0.45)",
+            paddingTop: 10,
+            display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10,
+            fontFamily: "var(--ed-font-ui)", fontSize: 11,
+          }}>
+            <SummaryCell label="Ejercicios" value={`${attemptedCount} / ${totalEx}`} />
+            <SummaryCell label="Correctos" value={`${res.solved}`} tone="#2ecc8f" />
+            <SummaryCell label="Mejor racha" value={`${res.streak}`} />
+            <SummaryCell label="Precisión total" value={`${accuracy}%`} tone="#fce9a8" emphasis />
+          </div>
+
+          {/* Acciones (no se imprimen) */}
+          <div className="ed-print-hide" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button className="ed-btn ed-btn-ghost" onClick={() => window.print()} style={{ padding: "10px 8px", fontSize: 13, height: 40 }}>
+              Imprimir reporte
             </button>
-            <button className="ed-btn ed-btn-primary" onClick={() => go("game")} style={{ padding: "10px 8px", fontSize: 13, height: 42 }}>
-              Reiniciar juego ↻
+            <button className="ed-btn ed-btn-primary" onClick={() => go("game")} style={{ padding: "10px 8px", fontSize: 13, height: 40 }}>
+              Jugar otra ronda
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportField({ label, value }) {
+  return (
+    <div style={{
+      padding: "8px 10px", borderRadius: 10,
+      background: "rgba(10,6,35,0.45)",
+      border: "1px solid rgba(148,120,255,0.25)",
+    }}>
+      <div className="ed-label" style={{ fontSize: 9, color: "var(--ed-ink-soft)", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 14, color: "var(--ed-ink)" }}>{value}</div>
+    </div>
+  );
+}
+
+function SummaryCell({ label, value, tone = "var(--ed-ink)", emphasis = false }) {
+  return (
+    <div style={{
+      padding: "8px 10px", borderRadius: 10,
+      background: emphasis ? "rgba(242,194,96,0.12)" : "rgba(10,6,35,0.4)",
+      border: `1px solid ${emphasis ? "rgba(242,194,96,0.5)" : "rgba(148,120,255,0.25)"}`,
+      textAlign: "center",
+    }}>
+      <div className="ed-label" style={{ fontSize: 9, color: "var(--ed-ink-soft)", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: emphasis ? 22 : 18, color: tone, lineHeight: 1 }}>
+        {value}
       </div>
     </div>
   );
