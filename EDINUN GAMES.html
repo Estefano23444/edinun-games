@@ -894,12 +894,6 @@ function CharacterScreen({ app, setApp, go }) {
             <div className="ed-body" style={{ marginTop: 6, maxWidth: 320, fontStyle: "italic", fontSize: 13, lineHeight: 1.35 }}>
               "{current.quote}"
             </div>
-            <div style={{
-              marginTop: 8, maxWidth: 320, fontFamily: "var(--ed-font-display)", fontWeight: 600,
-              fontSize: 13, color: "#7bf5c4", textShadow: "0 0 12px rgba(123,245,196,0.4)",
-            }}>
-              ✨ Si te equivocas, ¡es parte del camino! Cada número tiene su magia.
-            </div>
           </div>
         </div>
 
@@ -1288,7 +1282,9 @@ function GameScreen({ app, setApp, go }) {
 
       {/* Top HUD */}
       <div style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        {/* Izq: logo grande + back directo a home (cambiar de nivel) */}
+        {/* Izq: logo grande + back directo a home (cambiar de nivel).
+            El logo va sobre un backdrop opaco para que los glifos del
+            fondo (√, π, ∞...) no se vean transparentando detrás. */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
             className="ed-btn ed-btn-ghost"
@@ -1298,7 +1294,15 @@ function GameScreen({ app, setApp, go }) {
           >
             ← Cambiar nivel
           </button>
-          <EdinunLogoMini size={56} />
+          <div style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(11,58,45,0.92)",
+            borderRadius: 14,
+            padding: "4px 10px",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.35), 0 0 0 1px rgba(242,194,96,0.35)",
+          }}>
+            <EdinunLogoMini size={56} />
+          </div>
         </div>
 
         {/* Centro: barra de niveles */}
@@ -1343,39 +1347,64 @@ function GameScreen({ app, setApp, go }) {
         </div>
       </div>
 
-      {/* Personaje compañero — esquina inferior izquierda, pequeño */}
+      {/* Personaje compañero — esquina inferior izquierda, GRANDE.
+          Cuando hay feedback de error, muestra un bocadillo con frase motivadora
+          (las frases las arma `verify()` en feedbackMsg). */}
       <div style={{
-        position: "absolute", left: 8, bottom: 6, width: 160,
+        position: "absolute", left: 8, bottom: 4, width: 220,
         pointerEvents: "none", textAlign: "center",
       }}>
+        {/* Bocadillo motivador (visible solo en feedback de error con texto) */}
+        {feedback === "err" && feedbackMsg && (
+          <div style={{
+            position: "absolute", left: 160, bottom: 150,
+            background: "rgba(255,255,255,0.96)",
+            color: "#1a3a2d",
+            fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 13,
+            padding: "8px 14px", borderRadius: 16,
+            maxWidth: 220, lineHeight: 1.25,
+            boxShadow: "0 8px 22px rgba(0,0,0,0.35), 0 0 0 2px rgba(242,194,96,0.55)",
+            animation: "ed-pop-in 0.25s",
+          }}>
+            <div style={{
+              position: "absolute", left: -8, bottom: 14,
+              width: 0, height: 0,
+              borderTop: "8px solid transparent",
+              borderBottom: "8px solid transparent",
+              borderRight: "10px solid rgba(255,255,255,0.96)",
+            }} />
+            {feedbackMsg}
+          </div>
+        )}
         <div style={{ position: "relative", display: "flex", justifyContent: "center" }}>
           <div style={{
             position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
-            width: 110, height: 14, borderRadius: "50%",
-            background: "radial-gradient(ellipse, rgba(242,194,96,0.4), transparent 70%)",
-            filter: "blur(4px)",
+            width: 150, height: 18, borderRadius: "50%",
+            background: "radial-gradient(ellipse, rgba(242,194,96,0.45), transparent 70%)",
+            filter: "blur(5px)",
           }} />
-          <char.Component size={140} floating />
+          <char.Component size={200} floating />
         </div>
         <div style={{
           marginTop: -4,
-          fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 13,
+          fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 14,
           color: "#fce9a8", letterSpacing: "0.04em",
-          textShadow: "0 2px 6px rgba(0,0,0,0.5)",
+          textShadow: "0 2px 6px rgba(0,0,0,0.6)",
         }}>{char.name}</div>
       </div>
 
-      {/* Racha / progreso — en el centro superior */}
+      {/* Racha / progreso — separado del HUD para que no se pegue a los tabs de nivel */}
       <div style={{
-        position: "absolute", top: 54, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 6,
+        position: "absolute", top: 78, left: "50%", transform: "translateX(-50%)",
+        display: "flex", alignItems: "center", gap: 8,
       }}>
         <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
         {[0,1,2].map((i) => (
           <div key={i} style={{
             width: 10, height: 10, borderRadius: "50%",
-            background: i < solved ? "#fce9a8" : "rgba(255,255,255,0.2)",
-            boxShadow: i < solved ? "0 0 10px #fce9a8" : "none",
+            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+            color: i < solved ? "#fce9a8" : "#ff6b6b",
           }} />
         ))}
       </div>
@@ -1402,7 +1431,7 @@ function GameScreen({ app, setApp, go }) {
         const fullB = leftPadB.concat(padB);
         return (
           <div style={{
-            position: "absolute", top: 86, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", top: 104, left: "50%", transform: "translateX(-50%)",
             textAlign: "center", width: TOTAL_W,
           }}>
             <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 15, color: "rgba(255,255,255,0.9)", marginBottom: 8 }}>
@@ -1519,8 +1548,12 @@ function GameScreen({ app, setApp, go }) {
                     style={{
                       width: DIGIT_W, height: 62, fontSize: 36,
                       margin: "0 auto",
-                      background: feedback === "ok" ? "rgba(46,204,143,0.4)" : feedback === "err" ? "rgba(255,107,107,0.4)" : undefined,
                       borderColor: feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
+                      boxShadow: feedback === "ok"
+                        ? "0 0 18px rgba(46,204,143,0.65)"
+                        : feedback === "err"
+                          ? "0 0 18px rgba(255,107,107,0.65)"
+                          : undefined,
                       color: "#fff",
                       cursor: filled ? "grab" : "default",
                     }}
@@ -1588,7 +1621,8 @@ function GameScreen({ app, setApp, go }) {
         </button>
       </div>
 
-      {/* Feedback overlay con frase motivadora */}
+      {/* Feedback overlay — al acertar muestra estrellas; al fallar deja al
+          personaje hablar (bocadillo abajo a la izquierda). */}
       {feedback && (
         <div style={{
           position: "absolute", inset: 0, pointerEvents: "none",
@@ -1603,12 +1637,12 @@ function GameScreen({ app, setApp, go }) {
           }}>
             {feedback === "ok" ? "¡EXCELENTE!" : "¡UPS!"}
           </div>
-          {feedbackMsg && (
+          {feedback === "ok" && feedbackMsg && (
             <div style={{
-              fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 22,
-              color: feedback === "ok" ? "#fce9a8" : "#fff",
+              fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 28,
+              color: "#fce9a8",
               background: "rgba(0,0,0,0.5)",
-              padding: "6px 18px", borderRadius: 999,
+              padding: "6px 22px", borderRadius: 999,
               textShadow: "0 2px 6px rgba(0,0,0,0.6)",
             }}>
               {feedbackMsg}

@@ -325,12 +325,6 @@ function CharacterScreen({ app, setApp, go }) {
             <div className="ed-body" style={{ marginTop: 6, maxWidth: 320, fontStyle: "italic", fontSize: 13, lineHeight: 1.35 }}>
               "{current.quote}"
             </div>
-            <div style={{
-              marginTop: 8, maxWidth: 320, fontFamily: "var(--ed-font-display)", fontWeight: 600,
-              fontSize: 13, color: "#7bf5c4", textShadow: "0 0 12px rgba(123,245,196,0.4)",
-            }}>
-              ✨ Si te equivocas, ¡es parte del camino! Cada número tiene su magia.
-            </div>
           </div>
         </div>
 
