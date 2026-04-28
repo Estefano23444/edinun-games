@@ -24,7 +24,7 @@ Toda decisión de arquitectura, plan de implementación, o nota técnica relevan
 No build system, no package manager. Es HTML estático que carga React 18 + Babel Standalone desde unpkg. Pensado para servidores estáticos triviales (GitHub Pages, Netlify, S3, `python -m http.server`).
 
 - **Abrir local:** doble clic en `index.html` o `EDINUN GAMES.html`. Funciona sobre `file://` porque todo el JSX está inline en el HTML — no hace fetch a `.jsx` externos.
-- **Servir:** cualquier static server sirviendo el directorio raíz. `index.html` es el entry canónico para hosting; `EDINUN GAMES.html` es una copia idéntica con el nombre del producto.
+- **Servir local (canónico para QA responsive y captura de screenshots):** `python -m http.server 8765` desde la raíz del repo. `index.html` es el entry para hosting; `EDINUN GAMES.html` es una copia idéntica con el nombre del producto.
 - No hay tests, lint, ni build step.
 
 ## Architecture
@@ -34,12 +34,14 @@ Solo dos: `index.html` (idéntico a `EDINUN GAMES.html`) y `styles.css`. El HTML
 
 1. `EdinunLogo` / `EdinunLogoMini` (usan `assets/edinun-logo.png` directo)
 2. `CHARACTERS` catálogo + 4 SVG components (Mago/Física/Numerólogo/Geómetra) + `CharacterAvatar`
-3. `CosmosBg`, `useVisitorCount`, `HomeScreen`, `CharacterScreen`, `MenuScreen` (este último ya no está enrutado pero permanece exportado)
-4. `GameScreen`, `ResultsScreen` exportados; `ProfileScreen` existe en `game-screens.jsx` pero **no** se exporta a `window` ni se enruta — es código muerto residual.
+3. `CosmosBg`, `useVisitorCount`, `HomeScreen`, `CharacterScreen`, `MenuScreen` (este último ya no está enrutado)
+4. `GameScreen`, `ResultsScreen`; `ProfileScreen` existe en `game-screens.jsx` pero **no** se enruta en `App` — es código muerto residual.
 5. `App` shell + `DeviceStage` + `RotateHint` + `ReactDOM.createRoot().render(<App/>)`
 
-### Archivos `.jsx` y `design-canvas.jsx` en disco
-Son la **fuente editable** del bundle inline en el HTML. El HTML no los carga en runtime, pero el flujo de trabajo es: editar el `.jsx` → re-empaquetar al HTML con el script oficial.
+**Wiring entre archivos:** `App` referencia las pantallas vía `window.HomeScreen`, `window.GameScreen`, etc. No hay `window.X = X` explícitos en los `.jsx` — el bundle de Babel compila el script en scope global, así que toda `function` top-level queda colgada en `window` automáticamente. Por eso el orden en `bundle.py` (logo → characters → screens → game-screens → app) **es** el orden de dependencia: `App` debe correr último. Si en el futuro se migra a ES modules o `"use strict"` top-level, este atajo deja de funcionar y hay que añadir exports explícitos.
+
+### Archivos `.jsx` editables
+Los 5 `.jsx` (`logo`, `characters`, `screens`, `game-screens`, `app`) son la **fuente editable** del bundle inline en el HTML. El HTML no los carga en runtime, pero el flujo de trabajo es: editar el `.jsx` → re-empaquetar al HTML con el script oficial.
 
 ```bash
 # Re-empaquetar tras editar cualquier .jsx (concatena los 5 fuentes en orden y
@@ -48,7 +50,12 @@ Son la **fuente editable** del bundle inline en el HTML. El HTML no los carga en
 python .planning/bundle.py
 ```
 
-`design-canvas.jsx` es residuo del prototipo Claude Design y no se usa.
+Dos invariantes que `bundle.py` enforza y que un editor podría romper sin darse cuenta:
+
+- **No incluir `</script>` literal en ningún `.jsx`.** El parser HTML del navegador cerraría el bloque `<script type="text/babel">` ahí mismo y todo lo siguiente se renderizaría como texto. El script aborta con error si lo detecta. Workaround si lo necesitás dentro de un template literal: `${"<\\/scr"+"ipt>"}` o equivalente.
+- **El bundle reescribe desde `<script type="text/babel">` hasta `</html>`** (no solo el contenido del script). Cualquier markup que se quiera persistir después del script debe ir **antes** en el HTML, o se pierde en el siguiente bundle.
+
+`design-canvas.jsx` y la carpeta `uploads/` son residuos del prototipo original. Están en `.gitignore` y no se publican — un fresh clone no los tiene.
 
 ### Routing y estado
 Sin react-router. `App` mantiene `route` en `useState` y conmuta entre `HomeScreen | CharacterScreen | GameScreen | ResultsScreen` vía la función `go(route)`. Todo el estado de la sesión (`studentName`, `character`, `level`, `currentCategory`, `lastResult`, etc.) vive en el state `app` del componente `App` y se pasa por props (`{ app, setApp, go }`). No hay backend — persistencia limitada a `localStorage` para el contador de visitantes (`edinun_visitors_v1` + `edinun_visit_counted_v1` en sessionStorage como guarda anti-doble-conteo).
