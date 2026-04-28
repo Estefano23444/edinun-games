@@ -191,29 +191,11 @@ function HomeScreen({ app, setApp, go }) {
                 Estudiante!
               </span>
             </h1>
-            <p className="ed-body" style={{ marginTop: 8, fontSize: 15 }}>
-              Antes de empezar, dinos cómo te llamas para guardar tu progreso y resultados.
-            </p>
           </div>
 
-          {/* Input nombre */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div style={{ flex: 1, position: "relative" }}>
-              <input
-                className="ed-input"
-                placeholder="Escribe tu nombre"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && start()}
-              />
-            </div>
-            <button className="ed-btn ed-btn-primary" onClick={start} disabled={!name.trim()}
-              style={{ height: 52, padding: "0 28px", fontSize: 16, opacity: name.trim() ? 1 : 0.5 }}>
-              ENTRAR →
-            </button>
-          </div>
-
-          {/* Selección de nivel — botones únicos con color por nivel */}
+          {/* 1. Selección de nivel — primer paso del flujo. Va arriba para que
+              el niño elija qué quiere jugar antes de identificarse: tocar un
+              botón grande de color es más concreto que escribir un nombre. */}
           <div>
             <div className="ed-label" style={{ marginBottom: 10 }}>
               Selecciona un nivel para jugar
@@ -272,6 +254,28 @@ function HomeScreen({ app, setApp, go }) {
             </div>
           </div>
 
+          {/* 2. Nombre + ENTRAR — segundo paso. El placeholder hace de copy
+              explicativo, sin párrafo redundante (USER.md: corto y accionable). */}
+          <div>
+            <div className="ed-label" style={{ marginBottom: 10 }}>
+              Escribe tu nombre y entra
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ flex: 1, position: "relative" }}>
+                <input
+                  className="ed-input"
+                  placeholder="Escribe tu nombre"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && start()}
+                />
+              </div>
+              <button className="ed-btn ed-btn-primary" onClick={start} disabled={!name.trim()}
+                style={{ height: 52, padding: "0 28px", fontSize: 16, opacity: name.trim() ? 1 : 0.5 }}>
+                ENTRAR →
+              </button>
+            </div>
+          </div>
 
         </div>
       </div>
