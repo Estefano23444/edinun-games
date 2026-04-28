@@ -324,9 +324,44 @@ function GameScreen({ app, setApp, go }) {
         </div>
       </div>
 
+      {/* Pista de juego — bocadillo en la zona superior izquierda, sobre el
+          personaje. Explica COMO resolver (no QUE resolver), en una linea
+          pensada para 2do (6-8 anos): verbo directo + referencia a la columna
+          U para anclar la mirada en la rejilla CDU. Universal a todos los
+          niveles porque la regla "llenar de derecha a izquierda" aplica
+          siempre, sin importar la operacion. */}
+      <div style={{
+        position: "absolute", left: 16, top: 132, width: 210,
+        pointerEvents: "none",
+      }}>
+        <div style={{
+          position: "relative",
+          background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
+          border: "1.5px solid rgba(242,194,96,0.55)",
+          borderRadius: 16,
+          padding: "10px 12px",
+          fontFamily: "var(--ed-font-display)",
+          fontWeight: 600, fontSize: 14, lineHeight: 1.25,
+          color: "#fce9a8", textAlign: "center",
+          boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}>
+          Empieza por las unidades (U).
+          {/* Pico del bocadillo apuntando hacia el personaje (abajo). */}
+          <div style={{
+            position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
+            width: 0, height: 0,
+            borderLeft: "7px solid transparent",
+            borderRight: "7px solid transparent",
+            borderTop: "8px solid rgba(20,12,55,0.92)",
+            filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
+          }} />
+        </div>
+      </div>
+
       {/* Personaje compañero — lado izquierdo, elevado para no chocar con el
-          numpad. La frase motivadora ahora aparece en el feedback central
-          (con atribución al personaje), así que el bocadillo se eliminó.
+          numpad. La frase motivadora aparece en el feedback central (con
+          atribución al personaje); el bocadillo de arriba lleva la pista
+          de mecánica del juego.
           Sin z-index: queda en el orden natural del DOM, por encima de los
           glifos del fondo pero por debajo de la ecuación, numpad y botones,
           que vienen después en el JSX. */}
@@ -393,7 +428,7 @@ function GameScreen({ app, setApp, go }) {
             textAlign: "center", width: TOTAL_W,
           }}>
             <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 15, color: "rgba(255,255,255,0.9)", marginBottom: 8 }}>
-              Resuelve la siguiente operación:
+              Toca un número de abajo para llenar.
             </div>
 
             {/* Encabezado C D U — alineado sobre las columnas de dígitos */}
