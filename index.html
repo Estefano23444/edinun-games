@@ -1114,7 +1114,7 @@ function GameScreen({ app, setApp, go }) {
           niveles porque la regla "llenar de derecha a izquierda" aplica
           siempre, sin importar la operacion. */}
       <div style={{
-        position: "absolute", left: 16, top: 132, width: 210,
+        position: "absolute", left: 14, top: 130, width: 215,
         pointerEvents: "none",
       }}>
         <div style={{
@@ -1122,9 +1122,9 @@ function GameScreen({ app, setApp, go }) {
           background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
           border: "1.5px solid rgba(242,194,96,0.55)",
           borderRadius: 16,
-          padding: "10px 12px",
+          padding: "12px 14px",
           fontFamily: "var(--ed-font-display)",
-          fontWeight: 600, fontSize: 14, lineHeight: 1.25,
+          fontWeight: 700, fontSize: 17, lineHeight: 1.25,
           color: "#fce9a8", textAlign: "center",
           boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
         }}>
@@ -1208,9 +1208,19 @@ function GameScreen({ app, setApp, go }) {
         return (
           <div style={{
             position: "absolute", top: 104, left: "50%", transform: "translateX(-50%)",
-            textAlign: "center", width: TOTAL_W,
+            // El wrapper se ensancha para dar lugar a la instruccion en una
+            // sola linea con un fontSize legible cuando el lienzo se escala
+            // hacia abajo en telefonos. El equation grid interno sigue
+            // centrado con justifyContent: center, asi que las columnas CDU
+            // no se mueven — solo el texto del enunciado tiene mas aire.
+            textAlign: "center", width: Math.max(TOTAL_W, 480),
           }}>
-            <div style={{ fontFamily: "var(--ed-font-display)", fontWeight: 600, fontSize: 15, color: "rgba(255,255,255,0.9)", marginBottom: 8 }}>
+            <div style={{
+              fontFamily: "var(--ed-font-display)", fontWeight: 700,
+              fontSize: 20, lineHeight: 1.15,
+              color: "#fff", marginBottom: 10,
+              textShadow: "0 2px 6px rgba(0,0,0,0.45)",
+            }}>
               Toca un número de abajo para llenar.
             </div>
 
