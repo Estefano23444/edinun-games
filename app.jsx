@@ -3,7 +3,7 @@
 // Móvil portrait: el contenido NUNCA rota; un overlay BLOQUEANTE obliga
 // al usuario a girar físicamente el teléfono antes de poder usar la app.
 
-const { useState: useStateA, useEffect: useEffectA } = React;
+const { useState: useStateA, useEffect: useEffectA, useRef: useRefA } = React;
 
 // ─────────────────────────────────────────────────────────────
 // useViewportSize — devuelve el tamaño REAL visible del viewport.
@@ -108,7 +108,7 @@ function DeviceStage({ children, variant = "cosmic" }) {
   if (maxSide < 820) mode = "mobile";
   else if (minSide < 820) mode = "tablet";
   const portrait = vh > vw;
-  const scale = Math.max(Math.min(vw / W, vh / H), 0.15);
+  const baseScale = Math.max(Math.min(vw / W, vh / H), 0.15);
 
   // Detección de teléfono independiente del modo: cualquier dispositivo con
   // lado menor ≤ 600 CSS-px es un teléfono. Cubre todos los teléfonos
@@ -127,41 +127,216 @@ function DeviceStage({ children, variant = "cosmic" }) {
   // del DPR; si CSS lee el vmin actual, los glifos no se congelan y desync).
   const glyphSize = Math.max(48, Math.min(minSide * 0.07, 110));
 
-  // Debug: añadir #debug a la URL para ver lo que el navegador del
-  // dispositivo está leyendo en tiempo real (vw, vh, mode, lockPortrait).
-  // Útil para entender por qué no se dispara el overlay en un dispositivo
-  // específico. Sin #debug, no se renderiza nada.
   const debug = typeof window !== "undefined" && /(?:^|[#&])debug(?:&|$)/.test(window.location.hash || "");
 
+  // ─── Pinch-zoom y pan custom ─────────────────────────────────
+  // Reemplaza el zoom nativo del browser. Razón: con el lienzo letterboxed
+  // dentro de un wrapper viewport-sized, el visual viewport del browser
+  // puede panear hasta dejar al usuario mirando solo el cosmos vacío de los
+  // bordes — el "rebote" reportado en iPhone (ver .planning/ios-zoom.md).
+  // Aquí los gestos operan sobre el transform del lienzo, así que el zoom
+  // siempre gravita alrededor del contenido y no deriva a un borde
+  // decorativo.
+  const wrapperRef = useRefA(null);
+  const gestureRef = useRefA(null);
+  const stateRef = useRefA({ userZoom: 1, pan: { x: 0, y: 0 } });
+  const [userZoom, setUserZoom] = useStateA(1);
+  const [pan, setPan] = useStateA({ x: 0, y: 0 });
+  const [duringGesture, setDuringGesture] = useStateA(false);
+
+  useEffectA(() => {
+    stateRef.current = { userZoom, pan };
+  }, [userZoom, pan]);
+
+  // Reset al cambiar viewport (rotación, resize). Si no, el pan queda
+  // referenciado a un viewport que ya no existe.
+  useEffectA(() => {
+    setUserZoom(1);
+    setPan({ x: 0, y: 0 });
+    setDuringGesture(false);
+  }, [vw, vh]);
+
+  useEffectA(() => {
+    if (lockPortrait) return;
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const Z_MIN = 1;
+    const Z_MAX = 4;
+
+    const dist = (a, b) => Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+    const mid = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+
+    function clampPan(zoom, px, py) {
+      // Pan máximo: la mitad del exceso del lienzo escalado sobre el viewport.
+      // En zoom=1 el max es 0 (lienzo cabe en viewport, no hay donde panear).
+      // En zoom=N el lienzo mide N veces el lado contain, así que el usuario
+      // puede mover ±(sw - vw)/2 antes de que la orilla del lienzo cruce la
+      // orilla del viewport. Esto evita perder el contenido fuera de pantalla.
+      const sw = baseScale * zoom * W;
+      const sh = baseScale * zoom * H;
+      const maxX = Math.max(0, (sw - vw) / 2);
+      const maxY = Math.max(0, (sh - vh) / 2);
+      return {
+        x: Math.max(-maxX, Math.min(maxX, px)),
+        y: Math.max(-maxY, Math.min(maxY, py)),
+      };
+    }
+
+    function applyState(z, px, py) {
+      stateRef.current = { userZoom: z, pan: { x: px, y: py } };
+      setUserZoom(z);
+      setPan({ x: px, y: py });
+    }
+
+    function onTouchStart(e) {
+      const { userZoom: z0, pan: p0 } = stateRef.current;
+      if (e.touches.length >= 2) {
+        const [t0, t1] = e.touches;
+        gestureRef.current = {
+          mode: "pinch",
+          d0: dist(t0, t1),
+          m0: mid(t0, t1),
+          z0, p0: { ...p0 },
+        };
+        setDuringGesture(true);
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        gestureRef.current = {
+          mode: "pan-armed",
+          startX: t.clientX,
+          startY: t.clientY,
+          z0, p0: { ...p0 },
+        };
+        // No preventDefault — un tap simple debe seguir generando click.
+      }
+    }
+
+    function onTouchMove(e) {
+      const g = gestureRef.current;
+      if (!g) return;
+
+      // Si en medio de un gesto entra un segundo dedo, transición a pinch
+      // tomando el estado actual como punto de partida.
+      if (e.touches.length >= 2 && g.mode !== "pinch") {
+        const [t0, t1] = e.touches;
+        const { userZoom: zNow, pan: pNow } = stateRef.current;
+        gestureRef.current = {
+          mode: "pinch",
+          d0: dist(t0, t1),
+          m0: mid(t0, t1),
+          z0: zNow, p0: { ...pNow },
+        };
+        setDuringGesture(true);
+        e.preventDefault();
+        return;
+      }
+
+      if (e.touches.length >= 2 && g.mode === "pinch") {
+        const [t0, t1] = e.touches;
+        const d = dist(t0, t1);
+        const m = mid(t0, t1);
+        const ratio = d / g.d0;
+        // Permitimos pasar transitoriamente bajo Z_MIN para sensación elástica
+        // durante el gesto; en touchend hacemos snap-back al rango válido.
+        const newZoom = Math.max(Z_MIN * 0.7, Math.min(Z_MAX * 1.05, g.z0 * ratio));
+        const r = newZoom / g.z0;
+        const ux = g.m0.x - vw / 2;
+        const uy = g.m0.y - vh / 2;
+        // Fórmula que mantiene el punto medio de la pinza anclado al mismo
+        // píxel del lienzo durante todo el gesto. Derivación:
+        //   panX_new = (mx0 - vw/2) + (newZoom/z0) * (panX0 - (mx0 - vw/2))
+        //              + (mx_now - mx0)   ← desplazamiento del propio gesto
+        const newPanX = ux + r * (g.p0.x - ux) + (m.x - g.m0.x);
+        const newPanY = uy + r * (g.p0.y - uy) + (m.y - g.m0.y);
+        applyState(newZoom, newPanX, newPanY);
+        e.preventDefault();
+      } else if (e.touches.length === 1 && g.mode === "pan-armed") {
+        if (g.z0 <= 1.001) return; // sin zoom no panea — dejamos pasar el tap
+        const t = e.touches[0];
+        const dx = t.clientX - g.startX;
+        const dy = t.clientY - g.startY;
+        if (Math.hypot(dx, dy) > 8) {
+          gestureRef.current = { ...g, mode: "pan" };
+          setDuringGesture(true);
+          e.preventDefault();
+        }
+      } else if (e.touches.length === 1 && g.mode === "pan") {
+        const t = e.touches[0];
+        const dx = t.clientX - g.startX;
+        const dy = t.clientY - g.startY;
+        applyState(g.z0, g.p0.x + dx, g.p0.y + dy);
+        e.preventDefault();
+      }
+    }
+
+    function onTouchEnd(e) {
+      const g = gestureRef.current;
+      if (!g) return;
+      if (e.touches.length === 0) {
+        const { userZoom: z, pan: p } = stateRef.current;
+        const clampedZ = Math.max(Z_MIN, Math.min(Z_MAX, z));
+        let cp;
+        if (clampedZ <= 1.001) {
+          cp = { x: 0, y: 0 };
+        } else {
+          cp = clampPan(clampedZ, p.x, p.y);
+        }
+        applyState(clampedZ, cp.x, cp.y);
+        setDuringGesture(false);
+        gestureRef.current = null;
+      }
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: false });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [vw, vh, baseScale, lockPortrait]);
+
+  const totalScale = baseScale * userZoom;
+
   return (
-    // Wrapper en `position: relative`, NO `fixed`. iOS Safari maneja
-    // pésimamente el pinch-zoom sobre elementos `position: fixed`: el
-    // elemento queda anclado al layout viewport mientras el usuario panea
-    // el visual viewport, así que el contenido se "desliza" respecto al
-    // gesto y se siente inestable. Con `relative` el elemento fluye en el
-    // documento normal y la zoom del visual viewport amplifica todo de
-    // forma uniforme. Mantiene el efecto de "cubrir el viewport" porque
-    // ya lo dimensionamos con 100vw × 100dvh.
-    <div style={{
+    <div ref={wrapperRef} style={{
       width: "100vw", height: "100dvh",
       minHeight: "-webkit-fill-available",
       overflow: "hidden",
       position: "relative",
       background: variant === "chalkboard" ? "#0b3a2d" : "#050214",
+      // `touch-action: none` desactiva todos los gestos que el browser
+      // interpretaría por su cuenta (pinch, pan, doble-tap-zoom). Los
+      // implementamos en JS sobre el transform del lienzo para que el
+      // zoom siempre quede anclado al contenido y nunca derive a los
+      // bordes letterbox del wrapper. Los click/tap en botones siguen
+      // funcionando — esto solo bloquea gestos del browser, no eventos.
+      touchAction: "none",
     }}>
       <CosmosBg variant={variant} glyphSize={glyphSize} />
 
       {/* Lienzo lógico 900×540 centrado y escalado.
-          Posicionamos absoluto con left/top 50% + translate(-50%, -50%) ANTES
-          de la escala, para que el centro visual coincida con el centro
-          del viewport sin importar la relación entre tamaños. */}
+          El transform combina el escalado base (contain del viewport),
+          el zoom del usuario y el pan acumulado. El orden CSS es
+          right-to-left: scale → translate(pan) → translate(-50%,-50%). */}
       <div style={{
         width: W, height: H,
         position: "absolute",
         left: "50%", top: "50%",
-        transform: `translate(-50%, -50%) scale(${scale})`,
+        transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${totalScale})`,
         transformOrigin: "center center",
         overflow: "hidden",
+        // Sin transición durante el gesto activo (el lienzo sigue la pinza
+        // al instante); con transición elástica al soltar, para que el
+        // snap-back de zoom/pan a los límites válidos no sea abrupto.
+        transition: duringGesture ? "none" : "transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        willChange: "transform",
       }}>
         {children}
       </div>
@@ -180,6 +355,7 @@ function DeviceStage({ children, variant = "cosmic" }) {
 min=${minSide} max=${maxSide}
 mode=${mode} portrait=${portrait}
 isPhone=${isPhone} LOCK=${lockPortrait}
+zoom=${userZoom.toFixed(2)} pan=${pan.x.toFixed(0)},${pan.y.toFixed(0)}
 vv=${typeof window!=="undefined" && window.visualViewport ? "yes" : "no"}
 ua=${(typeof navigator!=="undefined" ? navigator.userAgent : "?").slice(0,60)}`}
         </div>
