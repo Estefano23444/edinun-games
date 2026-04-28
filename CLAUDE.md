@@ -62,7 +62,7 @@ Dos invariantes que `bundle.py` enforza y que un editor podría romper sin darse
 Sin react-router. `App` mantiene `route` en `useState` y conmuta entre `HomeScreen | CharacterScreen | GameScreen | ResultsScreen` vía la función `go(route)`. Todo el estado de la sesión (`studentName`, `character`, `level`, `currentCategory`, `lastResult`, etc.) vive en el state `app` del componente `App` y se pasa por props (`{ app, setApp, go }`). No hay backend — persistencia limitada a `localStorage` para el contador de visitantes (`edinun_visitors_v1` + `edinun_visit_counted_v1` en sessionStorage como guarda anti-doble-conteo).
 
 ### Flujo
-Home (nombre + nivel) → Personaje (4 personajes Mario-Kart-style, sin mención de niveles) → Game (3 rondas, ecuación protagonista CDU, resolución U→D→C drag-and-drop) → Results (printable). El **nivel** elegido en Home determina la operación en Game: `basic`→suma o resta aleatoria, `medium`→multiplicación, `advanced`→división. No hay menú de categorías ni pantalla de perfil en el flujo actual.
+Home (nivel → nombre → ENTRAR) → Personaje (4 personajes Mario-Kart-style, sin mención de niveles) → Game (3 rondas, ecuación protagonista CDU, resolución U→D→C drag-and-drop) → Results (printable). El **nivel** elegido en Home determina la operación en Game: `basic`→suma o resta aleatoria, `medium`→multiplicación, `advanced`→división. No hay menú de categorías ni pantalla de perfil en el flujo actual.
 
 ### Device stage (`DeviceStage`)
 Lienzo lógico fijo **900×540** (paisaje) escalado con `transform: scale()` al viewport. El fondo (`CosmosBg`) se renderiza fuera del lienzo y llena el viewport completo edge-to-edge — no hay marco de teléfono ni notch decorativo en ningún modo.

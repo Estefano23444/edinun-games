@@ -22,7 +22,9 @@ Handoff bundle de Claude Design (claude.ai/design). Prototipo HTML/JSX que se ll
 
 ## Flujo de la app
 
-`Home` (nombre + nivel) → `Personaje` (4 personajes) → `Juego` (3 rondas) → `Resultados` (con imprimir + reiniciar).
+`Home` (nivel → nombre → ENTRAR) → `Personaje` (4 personajes) → `Juego` (3 rondas) → `Resultados` (con imprimir + reiniciar).
+
+En Home el orden es **nivel primero, nombre después**: tocar un botón grande de color es más concreto para un niño de 6–8 años que escribir un nombre, así que se elige el nivel y luego se identifica antes de entrar.
 
 Sin pantalla de menú ni perfil — el nivel elegido en Home determina la operación:
 - `basic` → suma o resta aleatoria
@@ -34,6 +36,8 @@ Sin pantalla de menú ni perfil — el nivel elegido en Home determina la operac
 - **Personajes** son tipo Mario Kart: solo profesión + vibe (Merlín mago, Nova física, Cifra numerólogo, Pita geómetra). **No** mencionar niveles, álgebra ni fracciones en sus descripciones.
 - **Juego** tiene la **ecuación como protagonista** (no el personaje). Personaje queda pequeño en esquina inferior izquierda.
 - **Resolución de cifras de derecha a izquierda** (U → D → C). Drag & drop de fichas a slots, con tap-to-place como fallback. Click en slot lleno → borra ese dígito.
+- **Pista del personaje en juego**: bocadillo en la zona superior izquierda del lienzo con texto compacto ("Empieza por las unidades (U).") explicando CÓMO resolver, no QUÉ resolver. Universal a todos los niveles. El feedback motivador post-VERIFICAR sigue saliendo en el centro con atribución al personaje — los dos canales no se pisan: el bocadillo lleva pista de mecánica, el feedback central lleva reacción al intento.
+- **Enunciado de juego accionable**: "Toca un número de abajo para llenar." (no "Resuelve la siguiente operación") — verbo directo, instrucción de interacción, no descripción de la tarea.
 - **3 rondas por sesión** (no 5).
 - **Botones VERIFICAR y Borrar** en columna derecha del juego, sin botón de Pista.
 - **Contador de visitantes** persistente en `localStorage` (`edinun_visitors_v1`), incrementa una vez por sesión vía `sessionStorage` guard.
