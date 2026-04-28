@@ -48,6 +48,7 @@ Sin pantalla de menú ni perfil — el nivel elegido en Home determina la operac
 - **Glifos del fondo responsive** con `font-size: clamp(48px, 7vmin, 110px)` en `.ed-glyphs` + tamaños relativos `em` por glifo. Misma escala visual en cualquier dispositivo.
 - **Variant del fondo por ruta:** `cosmic` por defecto, `chalkboard` (verde pizarra) para la pantalla de juego. App pasa la variant a `DeviceStage`.
 - **Móvil portrait:** el lienzo paisaje queda letterboxed (pequeño). Aparece pildorita `↻ Gira tu dispositivo` no bloqueante. **El contenido nunca rota** — el usuario gira físicamente el teléfono.
+- **Pinch-zoom custom (no nativo).** Los gestos táctiles los maneja `DeviceStage` con handlers de touch (`{passive: false}`) y los aplica al `transform` del lienzo, no al visual viewport del browser. Razón: con el lienzo letterboxed, el zoom nativo de iOS Safari panea al usuario hasta los bordes vacíos de cosmos (el "rebote" reportado en iPhone 17 Pro). Meta viewport con `user-scalable=no` y `touch-action: none` en el wrapper. Detalle técnico (math del anclaje, modos de gesto, snap-back) en `.planning/ios-zoom.md`.
 - **`DebugNav`** del prototipo eliminado (era la barra `demo Inicio Personaje Juego Resultados`).
 - **React `.production.min.js`** en vez de development.
 

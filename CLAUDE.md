@@ -9,6 +9,7 @@ EDINUN GAMES — juegos de matemáticas para estudiantes. Originado como prototi
 - **Bitácora del proyecto** y decisiones tomadas: ver `MEMORY.md`.
 - **Preferencias del usuario** (principios de usabilidad, metodología responsive, invariantes de diseño): ver `USER.md`. **Léelo antes de cualquier cambio de UI o flujo.**
 - **Reglas internas del juego** (rondas, fórmula de estrellas, accuracy): ver `.planning/game-rules.md`. Editar `verify()` o el reporte sin tener en cuenta esas invariantes rompe el log académico.
+- **Pinch-zoom custom** (handlers de touch en `DeviceStage` que operan sobre el transform del lienzo, no sobre el visual viewport del browser): ver `.planning/ios-zoom.md`. Si reactivás el zoom nativo del browser (quitando `touch-action: none` del wrapper o `user-scalable=no` del meta), reaparece el "rebote" reportado en iPhone.
 
 ## Documentación de cambios importantes
 
@@ -77,6 +78,8 @@ Clasifica por viewport en tres modos (sólo se usa para decidir si mostrar el ro
 **El contenido nunca rota** según orientación del dispositivo. En móvil portrait el lienzo paisaje queda letterboxed (pequeño en vertical), y aparece un hint discreto `↻ Gira tu dispositivo` (no bloqueante, descartable) para invitar al usuario a rotar el teléfono físicamente. Al rotar, el viewport pasa a landscape y el lienzo escala naturalmente al ancho.
 
 Drag-and-drop HTML5 funciona con mouse (desktop) y trackpad; en móvil táctil el fallback es **tap-to-place** (toca un dígito → llena el siguiente slot vacío U→D→C; toca un slot lleno → lo borra).
+
+**Pinch-zoom y pan táctil custom.** El wrapper de `DeviceStage` lleva `touch-action: none` y handlers de `touchstart/move/end` con `{passive: false}` que aplican `userZoom` y `pan` al `transform` del lienzo. El zoom nativo del browser está desactivado en el meta viewport (`user-scalable=no`) — si reaparece, el "rebote" en iPhone vuelve. Detalle de la math y los modos de gesto (`pinch` / `pan-armed` / `pan`) en `.planning/ios-zoom.md`.
 
 ### Sistema de diseño (`styles.css`)
 Variables CSS bajo `:root` con prefijo `--ed-*` definen toda la paleta (cosmic violet/cyan + EDINUN gold), tipografía (Fredoka display, Nunito UI, JetBrains Mono), radios, sombras y glows. Clases reutilizables: `.ed-cosmos` (fondo cósmico animado), `.ed-glyphs` (símbolos matemáticos flotantes), `.ed-card`, `.ed-btn` + variantes (`-primary`, `-ghost`, `-verify`, `-erase`, `-hint`), `.ed-numpad-key`, `.ed-answer-slot` (con estados `.active`, `.filled`, `.drag-over`), `.ed-chip-{basic|medium|advanced}`, `.ed-dice-{c|d|u}`. Bloque `@media print` recorta a `.ed-print-area` para el reporte de resultados.
