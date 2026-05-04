@@ -5,3 +5,7 @@ Thumbs.db
 .claude/
 .responsive/
 /reponsive
+node_modules/
+package-lock.json
+juegos/*/.planning/qa-screenshots/
+juegos/*/.planning/qa-results.json
