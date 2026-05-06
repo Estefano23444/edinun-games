@@ -1,6 +1,6 @@
 ---
 name: Audiencia por juego (excepciones al default 6-8)
-description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10).
+description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10, operaciones-combinadas 10).
 type: project
 ---
 
@@ -23,6 +23,20 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - Suma/resta con pasos ±1..±15.
 - **Solo números naturales** (≥ 1) — ningún término puede ser 0 o negativo, ni la división puede producir fracción.
 - **Why:** el usuario lo pidió explícitamente. A 9 años ya saben las tablas de multiplicar.
+
+### `juegos/operaciones-combinadas/` — 10 años (2026-05-06)
+
+- Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
+- Mecánica única: **pasos guiados con numpad**. Cada ronda escala por complejidad de la expresión:
+  - Ronda 1: 2 operaciones (× con +/−), sin paréntesis. Ej: `2,5 + 1,8 × 3`.
+  - Ronda 2: 2 operaciones (÷ con +/−), división siempre limpia. Ej: `1,5 + 4,8 ÷ 2`.
+  - Ronda 3: 3 operaciones mezcladas. Ej: `2,5 + 1,2 × 3 − 0,8`.
+- **Aritmética en décimas** (×10) internamente para evitar imprecisión de float (`0.1 + 0.2 ≠ 0.3`).
+- Decimales con **1 cifra decimal máximo**. Solo `decimal × entero` y `decimal ÷ entero` — no `decimal × decimal`.
+- Numpad estándar 0-9 (sin botón de coma — la coma aparece fija en la posición correcta del slot layout).
+- Errores intermedios no fallan el ejercicio (igual que ronda 3 de `numeros-primos`).
+- Personaje destacado en landing: **Cifra** (`charId: "numero"`).
+- **Why:** el usuario lo pidió explícitamente. A 10 años se enseña formalmente la jerarquía de operaciones con decimales en el currículo.
 
 ### `juegos/numeros-primos/` — 10 años (2026-05-06)
 
