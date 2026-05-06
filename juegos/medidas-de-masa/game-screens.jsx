@@ -1,106 +1,121 @@
-// game-screens.jsx — Juego de Patrones numéricos (1 nivel, 3 rondas escalonadas).
+// game-screens.jsx — Juego de Medidas de masa (1 nivel, 3 rondas escalonadas).
 // Audiencia 9 años (excepción al default 6-8 del repo).
 
 const { useState: useStateG, useEffect: useEffectG, useRef: useRefG, useMemo: useMemoG } = React;
 
-// Portal a <body> para sacar overlays/modales del scope del DeviceStage,
-// que aplica `transform: scale()` al lienzo 900×540. Sin esto, un
-// `position: fixed` o `absolute` con `inset: 0` solo cubre el área del
-// lienzo escalado y deja los laterales del letterboxing sin oscurecer.
+// Portal a <body> para sacar overlays/modales del scope del DeviceStage.
 function PortalToBody({ children }) {
   return ReactDOM.createPortal(children, document.body);
 }
 
 // ─────────────────────────────────────────────────────────────
-// Generador de problemas — 1 categoría ("patrones"), 3 rondas.
-//   idx 0 → suma o resta (paso aditivo ±2..±11)
-//   idx 1 → multiplicación geométrica real · factor 2..5
-//   idx 2 → división geométrica real · factor 2..5
+// Generador de problemas — 1 categoría ("masa"), 3 rondas.
+//   idx 0 → SOLO multiplicación (×). Par aleatorio en la escala
+//           kg → hg → dag → g → dg → cg → mg, dirección mayor→menor.
+//           Factor entre ×10 (adyacentes) y ×1.000.000 (kg↔mg).
+//   idx 1 → SOLO división (÷). Mismo sorteo de pares, dirección
+//           menor→mayor. Factor entre ÷10 y ÷1.000.000.
+//   idx 2 → kg ↔ lb (factor 1 kg = 2,2 lb visible).
 //
 // Restricciones:
-// - Solo números naturales (≥ 1) en TODOS los términos.
-// - Tope 999 (3 cifras máximo). 5⁴ = 625 es el factor máximo viable.
-// - Para variedad, el `start` de cada secuencia se sortea entre todos
-//   los enteros que mantienen el último término ≤ 999 (mult) o
-//   primer término ≤ 999 (div). Ej: ×2 puede arrancar en 7 → 7,14,28,56,112.
-// - `excludeFactor` permite que la división no use el mismo factor que
-//   la multiplicación de la misma sesión (evita "todo del 8" repetido).
-//
-// `easy` modula el rango. Easy → factor pool {2,3}; Hard → {4,5}.
-// Suma/resta easy → paso 2..5; hard → 6..11.
-// El llamador (GameScreen) sortea al inicio de la sesión cuál de las
-// 3 rondas será la fácil — las otras dos serán difíciles.
+// - Tope 7 cifras (≤ 9.999.999) en TODOS los valores. Necesario para
+//   permitir kg↔mg (factor 1.000.000).
+// - Solo respuestas enteras. Por eso en ronda 2 el fromValue siempre
+//   es múltiplo del factor (= answer × factor).
+// - Para libras: pool de pares enteros (múltiplos de 5 kg / 11 lb).
 // ─────────────────────────────────────────────────────────────
-function makeProblem(cat, idx = 0, easy = false, excludeFactor = null) {
+const MASS_SCALE = ["kg", "hg", "dag", "g", "dg", "cg", "mg"];
+
+function makeProblem(cat, idx = 0) {
   const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
 
-  function pickBlanks(len, count) {
-    // Posiciones candidatas: intermedias (1..len-2). Nunca el primer ni el
-    // último término — el chico necesita referencias en ambos extremos.
-    const cands = [];
-    for (let i = 1; i <= len - 2; i++) cands.push(i);
-    for (let i = cands.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [cands[i], cands[j]] = [cands[j], cands[i]];
-    }
-    return cands.slice(0, count).sort((a, b) => a - b);
-  }
-
-  // Todas las secuencias tienen 5 términos y 2 huecos.
-  const len = 5;
-  const blankCount = 2;
-
   if (idx === 0) {
-    // Suma o resta. Easy → paso 2..5; Hard → paso 6..11.
-    const isAdd = Math.random() < 0.5;
-    const step = easy ? rand(2, 5) : rand(6, 11);
-    if (isAdd) {
-      const start = rand(1, 25);
-      const terms = Array.from({ length: len }, (_, i) => start + i * step);
-      return { type: "patrones", idx, op: "+", step, terms, blanks: pickBlanks(len, blankCount) };
-    } else {
-      // Asegurar que el último término sea ≥ 1: start - (len-1)*step ≥ 1.
-      const minStart = (len - 1) * step + 1;
-      const start = rand(minStart, minStart + 25);
-      const terms = Array.from({ length: len }, (_, i) => start - i * step);
-      return { type: "patrones", idx, op: "−", step, terms, blanks: pickBlanks(len, blankCount) };
-    }
-  }
-
-  // Pool de factores según dificultad. Tope 5 para mantener ≤ 999 (5⁴=625).
-  const easyPool = [2, 3];
-  const hardPool = [4, 5];
-  function pickFactor() {
-    let pool = easy ? easyPool.slice() : hardPool.slice();
-    if (excludeFactor !== null) {
-      const filtered = pool.filter((f) => f !== excludeFactor);
-      if (filtered.length > 0) pool = filtered;
-    }
-    return pool[rand(0, pool.length - 1)];
+    // Ronda 1 — multiplicación. Sortea dos posiciones distintas en la
+    // escala; la de menor índice es la unidad mayor (origen),
+    // la de mayor índice es la menor (destino).
+    const big = rand(0, MASS_SCALE.length - 2);
+    const small = rand(big + 1, MASS_SCALE.length - 1);
+    const factor = Math.pow(10, small - big);
+    const fromValue = rand(1, 9);
+    const answer = fromValue * factor;
+    return {
+      type: "masa", idx,
+      fromValue, fromUnit: MASS_SCALE[big],
+      toUnit: MASS_SCALE[small],
+      answer,
+      showFactor: false,
+    };
   }
 
   if (idx === 1) {
-    // Multiplicación geométrica real: cada término = anterior × factor.
-    // Secuencia: start, start·F, start·F², start·F³, start·F⁴.
-    // start variable (1..⌊999/F⁴⌋) para variedad: ×2 admite hasta start=62.
-    const factor = pickFactor();
-    const maxStart = Math.max(1, Math.floor(999 / Math.pow(factor, len - 1)));
-    const start = rand(1, maxStart);
-    const terms = Array.from({ length: len }, (_, i) => start * Math.pow(factor, i));
-    return { type: "patrones", idx, op: "×", step: factor, terms, blanks: pickBlanks(len, blankCount) };
+    // Ronda 2 — división. Mismo sorteo de pares pero dirección invertida:
+    // origen es la unidad MENOR, destino es la MAYOR.
+    // El fromValue se construye como answer × factor para garantizar
+    // que la división dé un entero limpio.
+    //
+    // Cantidad de dígitos de la respuesta = ALEATORIA (1, 2 o 3 dígitos
+    // según permita el factor + tope 7 cifras). Primero sorteamos la
+    // longitud de la respuesta entre las posibles, luego un valor dentro
+    // de esa longitud. Así el chico ingresa una cantidad variable de
+    // dígitos en cada problema.
+    const big = rand(0, MASS_SCALE.length - 2);
+    const small = rand(big + 1, MASS_SCALE.length - 1);
+    const factor = Math.pow(10, small - big);
+    const maxAnswer = Math.floor(9999999 / factor);
+
+    const possibleLens = [];
+    if (maxAnswer >= 1) possibleLens.push(1);
+    if (maxAnswer >= 10) possibleLens.push(2);
+    if (maxAnswer >= 100) possibleLens.push(3);
+    const targetLen = possibleLens[rand(0, possibleLens.length - 1)];
+    const minVal = targetLen === 1 ? 1 : Math.pow(10, targetLen - 1);
+    const maxVal = Math.min(maxAnswer, Math.pow(10, targetLen) - 1);
+    const answer = rand(minVal, maxVal);
+    const fromValue = answer * factor;
+    return {
+      type: "masa", idx,
+      fromValue, fromUnit: MASS_SCALE[small],
+      toUnit: MASS_SCALE[big],
+      answer,
+      showFactor: false,
+    };
   }
 
-  // idx === 2 — División geométrica real: cada término = anterior ÷ divisor.
-  // Para que TODOS los términos sean enteros y el último ≥ 1, el primer
-  // término debe ser múltiplo de divisor⁴. Sorteamos un múltiplo aleatorio
-  // dentro del rango que cabe en 999.
-  const divisor = pickFactor();
-  const baseDiv = Math.pow(divisor, len - 1);
-  const maxMultiplier = Math.max(1, Math.floor(999 / baseDiv));
-  const multiplier = rand(1, maxMultiplier);
-  const start = baseDiv * multiplier;
-  const terms = Array.from({ length: len }, (_, i) => start / Math.pow(divisor, i));
-  return { type: "patrones", idx, op: "÷", step: divisor, terms, blanks: pickBlanks(len, blankCount) };
+  // idx === 2 — kg ↔ lb con factor 2,2.
+  // Pool de pares enteros que caben en 3 cifras (1 kg = 2,2 lb).
+  const pool = [
+    { kg: 5, lb: 11 },
+    { kg: 10, lb: 22 },
+    { kg: 15, lb: 33 },
+    { kg: 20, lb: 44 },
+    { kg: 25, lb: 55 },
+    { kg: 50, lb: 110 },
+    { kg: 100, lb: 220 },
+    { kg: 150, lb: 330 },
+    { kg: 200, lb: 440 },
+    { kg: 250, lb: 550 },
+    { kg: 300, lb: 660 },
+    { kg: 400, lb: 880 },
+    { kg: 450, lb: 990 },
+  ];
+  const item = pool[rand(0, pool.length - 1)];
+  const dirKgToLb = Math.random() < 0.5;
+  if (dirKgToLb) {
+    return {
+      type: "masa", idx,
+      fromValue: item.kg, fromUnit: "kg",
+      toUnit: "lb",
+      answer: item.lb,
+      showFactor: true,
+    };
+  }
+  return {
+    type: "masa", idx,
+    fromValue: item.lb, fromUnit: "lb",
+    toUnit: "kg",
+    answer: item.kg,
+    showFactor: true,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -137,33 +152,64 @@ function SlotBox({ value, feedback, size = 50 }) {
 // ─────────────────────────────────────────────────────────────
 const ENCOURAGEMENTS = [
   "¡Casi! Sigue intentándolo.",
-  "Cada patrón tiene su regla.",
+  "Recuerda la equivalencia entre unidades.",
   "¡La próxima es tuya!",
   "Equivocarse también es aprender.",
-  "Mira de nuevo cómo cambian los números.",
+  "Mira de nuevo cuántos ceros se mueven.",
   "¡Vamos al siguiente reto!",
   "Cada error te acerca al acierto.",
 ];
+
+// ─────────────────────────────────────────────────────────────
+// Tabla de unidades de masa — referencia visual para rondas
+// métricas (1 y 2). Estilo "tabla del libro": celdas en fila, de
+// mayor (kg) a menor (mg). El juego solo evalúa múltiplos del gramo;
+// los submúltiplos están en la tabla como referencia del sistema
+// completo. En ronda 3 (libras) se reemplaza por la píldora del
+// factor 1 kg = 2,2 lb.
+// ─────────────────────────────────────────────────────────────
+function UnitsTable() {
+  const UNITS = ["kg", "hg", "dag", "g", "dg", "cg", "mg"];
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: `repeat(${UNITS.length}, 1fr)`,
+      width: 480,
+      borderRadius: 12,
+      overflow: "hidden",
+      border: "2px solid rgba(252,233,168,0.65)",
+      boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+    }}>
+      {UNITS.map((u, i) => (
+        <div key={u} style={{
+          padding: "12px 0",
+          background: "rgba(252,233,168,0.12)",
+          borderRight: i < UNITS.length - 1 ? "2px solid rgba(252,233,168,0.65)" : "none",
+          fontFamily: "var(--ed-font-display)", fontWeight: 700,
+          fontSize: 22, color: "#fce9a8",
+          textAlign: "center",
+          textShadow: "0 0 10px rgba(252,233,168,0.35)",
+          letterSpacing: "0.02em",
+        }}>
+          {u}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 // PANTALLA DE JUEGO — 3 rondas escalonadas por idx
 // ─────────────────────────────────────────────────────────────
 function GameScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
-  const cat = app.currentCategory || "patrones";
-  const catLabel = app.currentCatLabel || "Patrones numéricos";
+  const cat = app.currentCategory || "masa";
+  const catLabel = app.currentCatLabel || "Medidas de masa";
 
-  // Sorteo al inicio de la sesión: cuál ronda (0, 1 o 2) es la "fácil".
-  // Las otras dos serán "difíciles". Con cada partida cambia.
-  const easyRound = useRefG(Math.floor(Math.random() * 3));
-  // Factor de la multiplicación (idx 1) — para que la división (idx 2) lo
-  // excluya y nunca compartan factor en la misma sesión.
-  const multFactor = useRefG(null);
+  const [problem, setProblem] = useStateG(() => makeProblem(cat, 0));
 
-  const [problem, setProblem] = useStateG(() => makeProblem(cat, 0, 0 === easyRound.current));
-
-  // Por cada hueco, un array de slots (largo = String(answer).length).
-  const [blankInputs, setBlankInputs] = useStateG([]);
+  // Slot único: array de dígitos del largo de la respuesta correcta.
+  const [slots, setSlots] = useStateG([]);
 
   const [elapsed, setElapsed] = useStateG(0);
   const [stars, setStars] = useStateG(0);
@@ -178,14 +224,11 @@ function GameScreen({ app, setApp, go }) {
   const started = useRefG(Date.now());
   const exerciseStart = useRefG(Date.now());
 
-  // Reset de inputs al cambiar de problema (y en el primer render).
+  // Reset de slots al cambiar de problema (y en el primer render).
   useEffectG(() => {
-    if (problem.type === "patrones") {
-      const arr = problem.blanks.map((bi) => {
-        const len = String(problem.terms[bi]).length;
-        return Array(len).fill("");
-      });
-      setBlankInputs(arr);
+    if (problem.type === "masa") {
+      const len = String(problem.answer).length;
+      setSlots(Array(len).fill(""));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problem]);
@@ -199,39 +242,28 @@ function GameScreen({ app, setApp, go }) {
   }, []);
 
   function pressDigit(d) {
-    // Buscar el primer slot vacío en orden de huecos (izq→der).
-    for (let bi = 0; bi < blankInputs.length; bi++) {
-      const slot = blankInputs[bi];
-      const emptyIdx = slot.findIndex((x) => x === "");
-      if (emptyIdx !== -1) {
-        // No leading zero — solo naturales, ningún término empieza con 0.
-        if (emptyIdx === 0 && d === "0") return;
-        const next = blankInputs.map((arr) => [...arr]);
-        next[bi][emptyIdx] = d;
-        setBlankInputs(next);
+    const emptyIdx = slots.findIndex((x) => x === "");
+    if (emptyIdx === -1) return;
+    // No leading zero — la respuesta es entera ≥ 1, ningún número empieza con 0.
+    if (emptyIdx === 0 && d === "0") return;
+    const next = [...slots];
+    next[emptyIdx] = d;
+    setSlots(next);
+  }
+
+  function eraseLast() {
+    for (let i = slots.length - 1; i >= 0; i--) {
+      if (slots[i] !== "") {
+        const next = [...slots];
+        next[i] = "";
+        setSlots(next);
         return;
       }
     }
   }
 
-  function eraseLast() {
-    // Borra el último dígito ingresado (último blank, posición de la derecha).
-    for (let bi = blankInputs.length - 1; bi >= 0; bi--) {
-      const slot = blankInputs[bi];
-      for (let i = slot.length - 1; i >= 0; i--) {
-        if (slot[i] !== "") {
-          const next = blankInputs.map((arr) => [...arr]);
-          next[bi][i] = "";
-          setBlankInputs(next);
-          return;
-        }
-      }
-    }
-  }
-
   function verify() {
-    // Todos los slots de todos los huecos deben estar llenos.
-    const allFilled = blankInputs.length > 0 && blankInputs.every((slot) => slot.length > 0 && slot.every((x) => x !== ""));
+    const allFilled = slots.length > 0 && slots.every((x) => x !== "");
     if (!allFilled) {
       setFeedback("err");
       setFeedbackMsg("Completa los casilleros");
@@ -239,15 +271,8 @@ function GameScreen({ app, setApp, go }) {
       return;
     }
 
-    // Comparar cada hueco con el término correcto.
-    let isCorrect = true;
-    const userVals = [];
-    for (let bi = 0; bi < blankInputs.length; bi++) {
-      const userVal = parseInt(blankInputs[bi].join(""), 10);
-      userVals.push(userVal);
-      const correctVal = problem.terms[problem.blanks[bi]];
-      if (userVal !== correctVal) isCorrect = false;
-    }
+    const userVal = parseInt(slots.join(""), 10);
+    const isCorrect = userVal === problem.answer;
 
     if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
 
@@ -259,23 +284,19 @@ function GameScreen({ app, setApp, go }) {
     const newStarsSession = starsSession + earned;
     const newStarsTotal = stars + earned;
 
-    // Adaptación del log: la "operación" es la secuencia con huecos visible,
-    // el paso (b) describe la regla, correctAnswer son los valores correctos.
-    const seqDisplay = problem.terms.map((t, i) =>
-      problem.blanks.indexOf(i) === -1 ? String(t) : "?"
-    ).join(", ");
-    const correctVals = problem.blanks.map((bi) => problem.terms[bi]);
-    const stepStr = (problem.op === "+" || problem.op === "−")
-      ? `${problem.op}${problem.step}`
-      : `${problem.op}${problem.step}`;
-
+    // Adaptación del log:
+    //   a = "5 dag"   (lado izquierdo: valor + unidad)
+    //   b = "g"       (unidad destino)
+    //   op = "="      (igualdad de la conversión)
+    //   correctAnswer = "50"
+    //   userAnswer = lo que escribió
     const entry = {
       idx: newAttempted,
-      a: seqDisplay,
-      b: stepStr,
-      op: "→",
-      correctAnswer: correctVals.join(", "),
-      userAnswer: userVals.join(", "),
+      a: `${problem.fromValue} ${problem.fromUnit}`,
+      b: problem.toUnit,
+      op: "=",
+      correctAnswer: String(problem.answer),
+      userAnswer: String(userVal),
       isCorrect,
       time: exerciseSec,
       earned,
@@ -313,13 +334,7 @@ function GameScreen({ app, setApp, go }) {
         window.incrementGamesCompleted && window.incrementGamesCompleted();
         go("results");
       } else {
-        // Capturar el factor de la multiplicación (problema actual idx=1)
-        // para que la siguiente división (idx=2) lo excluya.
-        if (problem.idx === 1) multFactor.current = problem.step;
-
-        // newAttempted = índice del PRÓXIMO ejercicio (1 o 2).
-        const exclude = newAttempted === 2 ? multFactor.current : null;
-        setProblem(makeProblem(cat, newAttempted, newAttempted === easyRound.current, exclude));
+        setProblem(makeProblem(cat, newAttempted));
         exerciseStart.current = Date.now();
       }
     }, wait);
@@ -331,36 +346,37 @@ function GameScreen({ app, setApp, go }) {
     return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   }
 
-  const bocadilloText = "Descubre la regla del patrón.";
-  const instructionText = "Completa el patrón";
-  const tipoLabel = problem.op === "+" || problem.op === "−"
-    ? "SUMA O RESTA"
-    : problem.op === "×"
-      ? "MULTIPLICACIÓN"
-      : "DIVISIÓN";
+  const bocadilloText = "Convirtamos masa entre unidades.";
+  const instructionText = "Convierte la unidad";
 
-  // Tile width / fontSize según largo del término. Para factores grandes
-  // (×10 con term=10000) los números deben encogerse para que la fila quepa
-  // en el wrapper de 580 sin overflow.
-  function termTileWidth(t) {
+  // Tile width / fontSize según largo del valor visible.
+  // Hasta 7 cifras (1.000.000 mg = 1 kg).
+  function valueTileWidth(t) {
     const len = String(t).length;
-    if (len <= 2) return Math.max(48, len * 26 + 18);
-    if (len === 3) return 78;
-    if (len === 4) return 96;
-    return 116; // 5+ dígitos
+    if (len <= 2) return Math.max(56, len * 28 + 22);
+    if (len === 3) return 92;
+    if (len === 4) return 110;
+    if (len === 5) return 130;
+    if (len === 6) return 150;
+    return 168; // 7 dígitos
   }
-  function termFontSize(t) {
+  function valueFontSize(t) {
     const len = String(t).length;
-    if (len <= 2) return 40;
-    if (len === 3) return 34;
-    if (len === 4) return 28;
-    return 24;
+    if (len <= 2) return 44;
+    if (len === 3) return 38;
+    if (len === 4) return 34;
+    if (len === 5) return 30;
+    if (len === 6) return 28;
+    return 26; // 7 dígitos
   }
-  // Slot size adaptativo según largo del valor del hueco.
   function slotSize(slotsLen) {
-    if (slotsLen <= 2) return 44;
-    if (slotsLen === 3) return 38;
-    return 32; // 4-5 dígitos
+    if (slotsLen <= 1) return 52;
+    if (slotsLen === 2) return 46;
+    if (slotsLen === 3) return 40;
+    if (slotsLen === 4) return 36;
+    if (slotsLen === 5) return 32;
+    if (slotsLen === 6) return 28;
+    return 26; // 7 slots
   }
 
   return (
@@ -371,7 +387,6 @@ function GameScreen({ app, setApp, go }) {
           <EdinunLogoMini size={64} />
         </div>
 
-        {/* Centro: catLabel discreto en lugar de tabs */}
         <div style={{
           position: "absolute", left: "50%", top: "50%",
           transform: "translate(-50%, -50%)",
@@ -466,7 +481,7 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* ══════ ZONA CENTRAL — secuencia con huecos ══════ */}
+      {/* ══════ ZONA CENTRAL — ecuación de conversión ══════ */}
       <div data-qa="zona-central" style={{
         position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
         width: 580, height: 340,
@@ -474,71 +489,81 @@ function GameScreen({ app, setApp, go }) {
         alignItems: "center", justifyContent: "space-evenly",
         textAlign: "center",
       }}>
-        <div>
-          <div style={{
-            fontFamily: "var(--ed-font-display)", fontWeight: 700,
-            fontSize: 26, lineHeight: 1.1,
-            color: "#fff", marginBottom: 8,
-            textShadow: "0 2px 6px rgba(0,0,0,0.45)",
-          }}>
-            {instructionText}
-          </div>
-          <div style={{
-            fontFamily: "var(--ed-font-mono)", fontSize: 12,
-            color: "rgba(255,255,255,0.6)", letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}>
-            {tipoLabel}
-          </div>
+        <div style={{
+          fontFamily: "var(--ed-font-display)", fontWeight: 700,
+          fontSize: 26, lineHeight: 1.1,
+          color: "#fff",
+          textShadow: "0 2px 6px rgba(0,0,0,0.45)",
+        }}>
+          {instructionText}
         </div>
 
-        {/* Secuencia — términos separados por comas para diferenciarlos. */}
+        {/* Guía visual:
+            - Rondas 1, 2 (idx 0, 1): tabla de unidades métricas.
+            - Ronda 3 (idx 2): píldora del factor 1 kg = 2,2 lb. */}
+        {problem.showFactor ? (
+          <div style={{
+            display: "inline-flex", alignItems: "center",
+            padding: "8px 18px",
+            borderRadius: 999,
+            border: "1.5px solid rgba(252,233,168,0.5)",
+            background: "rgba(10,6,35,0.55)",
+            fontFamily: "var(--ed-font-display)", fontWeight: 700,
+            fontSize: 22, color: "#fce9a8",
+            letterSpacing: "0.03em",
+            textShadow: "0 0 10px rgba(252,233,168,0.35)",
+          }}>
+            1 kg = 2,2 lb
+          </div>
+        ) : (
+          <UnitsTable />
+        )}
+
+        {/* Ecuación: "5 dag = [_ _] g" */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
           flexWrap: "nowrap",
         }}>
-          {problem.terms.map((t, i) => {
-            const blankIdx = problem.blanks.indexOf(i);
-            const isLast = i === problem.terms.length - 1;
-            // Término visible o hueco con slots
-            const cell = blankIdx === -1 ? (
-              <div style={{
-                minWidth: termTileWidth(t),
-                padding: "10px 6px",
-                fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                fontSize: termFontSize(t), lineHeight: 1, color: "#fce9a8",
-                textShadow: "0 0 12px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
-                textAlign: "center",
-              }}>
-                {t}
-              </div>
-            ) : (() => {
-              const slots = blankInputs[blankIdx] || [];
-              const slotsLen = slots.length || String(problem.terms[i]).length;
-              const ss = slotSize(slotsLen);
-              return (
-                <div style={{ display: "flex", gap: 4 }}>
-                  {Array.from({ length: slotsLen }).map((_, j) => (
-                    <SlotBox key={j} value={slots[j] || ""} feedback={feedback} size={ss} />
-                  ))}
-                </div>
-              );
-            })();
+          {/* Lado izquierdo: valor + unidad */}
+          <div style={{
+            display: "flex", alignItems: "baseline", gap: 6,
+            fontFamily: "var(--ed-font-display)", fontWeight: 700,
+            color: "#fce9a8",
+            textShadow: "0 0 12px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
+          }}>
+            <div style={{
+              minWidth: valueTileWidth(problem.fromValue),
+              fontSize: valueFontSize(problem.fromValue),
+              textAlign: "right",
+            }}>
+              {problem.fromValue}
+            </div>
+            <div style={{ fontSize: 24, color: "#fce9a8", opacity: 0.85 }}>
+              {problem.fromUnit}
+            </div>
+          </div>
 
-            return (
-              <React.Fragment key={i}>
-                {cell}
-                {!isLast && (
-                  <span style={{
-                    fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                    fontSize: 32, lineHeight: 1, color: "#fce9a8",
-                    transform: "translateY(8px)",
-                    padding: "0 1px",
-                  }}>,</span>
-                )}
-              </React.Fragment>
-            );
-          })}
+          {/* Igual */}
+          <div style={{
+            fontFamily: "var(--ed-font-display)", fontWeight: 700,
+            fontSize: 38, color: "#fce9a8",
+          }}>=</div>
+
+          {/* Slots */}
+          <div style={{ display: "flex", gap: 5 }}>
+            {Array.from({ length: slots.length }).map((_, j) => (
+              <SlotBox key={j} value={slots[j] || ""} feedback={feedback} size={slotSize(slots.length)} />
+            ))}
+          </div>
+
+          {/* Unidad destino */}
+          <div style={{
+            fontFamily: "var(--ed-font-display)", fontWeight: 700,
+            fontSize: 24, color: "#fce9a8", opacity: 0.85,
+            textShadow: "0 2px 6px rgba(0,0,0,0.4)",
+          }}>
+            {problem.toUnit}
+          </div>
         </div>
       </div>
 
@@ -679,7 +704,7 @@ function GameScreen({ app, setApp, go }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// PANTALLA DE RESULTADOS — sin cambios estructurales
+// PANTALLA DE RESULTADOS
 // ─────────────────────────────────────────────────────────────
 function formatOp(e) {
   return `${e.a} ${e.op} ${e.b}`;
@@ -758,8 +783,9 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
           <thead>
             <tr style={printStyles.thHead}>
               <th style={printStyles.th}>#</th>
-              <th style={printStyles.th}>Secuencia</th>
-              <th style={{ ...printStyles.th, ...printStyles.thR }}>Regla</th>
+              <th style={printStyles.th}>Conversión</th>
+              <th style={{ ...printStyles.th, ...printStyles.thC }}>=</th>
+              <th style={{ ...printStyles.th, ...printStyles.thR }}>Unidad destino</th>
               <th style={{ ...printStyles.th, ...printStyles.thR }}>Respuesta del estudiante</th>
               <th style={{ ...printStyles.th, ...printStyles.thR }}>Resultado correcto</th>
               <th style={{ ...printStyles.th, ...printStyles.thC }}>Estado</th>
@@ -771,6 +797,7 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
               <tr key={e.idx} style={printStyles.tr}>
                 <td style={{ ...printStyles.td, ...printStyles.tdNum }}>{e.idx}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdOp }}>{e.a}</td>
+                <td style={{ ...printStyles.td, ...printStyles.tdC }}>{e.op}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.b}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.userAnswer}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.correctAnswer}</td>
@@ -781,7 +808,7 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
               </tr>
             ))}
             {log.length === 0 && (
-              <tr><td colSpan={7} style={printStyles.tdEmpty}>No se registraron ejercicios en esta sesión.</td></tr>
+              <tr><td colSpan={8} style={printStyles.tdEmpty}>No se registraron ejercicios en esta sesión.</td></tr>
             )}
           </tbody>
         </table>
@@ -813,7 +840,7 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
 
 function ResultsScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
-  const res = app.lastResult || { category: "Patrones numéricos", solved: 0, total: 3, time: 0, starsEarned: 0, log: [] };
+  const res = app.lastResult || { category: "Medidas de masa", solved: 0, total: 3, time: 0, starsEarned: 0, log: [] };
   const m = Math.floor(res.time / 60), s = res.time % 60;
   const totalEx = res.total || 3;
   const attemptedCount = (res.log || []).length;
@@ -888,8 +915,9 @@ function ResultsScreen({ app, setApp, go }) {
                   borderBottom: "1px solid rgba(148,120,255,0.3)",
                 }}>
                   <th style={{ textAlign: "left", padding: "6px 8px", width: 36 }}>#</th>
-                  <th style={{ textAlign: "left", padding: "6px 8px" }}>Secuencia</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Regla</th>
+                  <th style={{ textAlign: "left", padding: "6px 8px" }}>Conversión</th>
+                  <th style={{ textAlign: "center", padding: "6px 8px" }}>=</th>
+                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Unidad destino</th>
                   <th style={{ textAlign: "right", padding: "6px 8px" }}>Respuesta del estudiante</th>
                   <th style={{ textAlign: "right", padding: "6px 8px" }}>Respuesta correcta</th>
                   <th style={{ textAlign: "center", padding: "6px 8px" }}>Estado</th>
@@ -901,6 +929,7 @@ function ResultsScreen({ app, setApp, go }) {
                   <tr key={e.idx} style={{ borderBottom: "1px solid rgba(148,120,255,0.18)" }}>
                     <td style={{ padding: "8px 8px", color: "var(--ed-ink-soft)" }}>{e.idx}</td>
                     <td style={{ padding: "8px 8px", fontWeight: 600 }}>{e.a}</td>
+                    <td style={{ padding: "8px 8px", textAlign: "center" }}>{e.op}</td>
                     <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.b}</td>
                     <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.userAnswer}</td>
                     <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.correctAnswer}</td>
@@ -915,7 +944,7 @@ function ResultsScreen({ app, setApp, go }) {
                 ))}
                 {(res.log || []).length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ padding: "16px 8px", textAlign: "center", color: "var(--ed-ink-soft)", fontStyle: "italic" }}>
+                    <td colSpan={8} style={{ padding: "16px 8px", textAlign: "center", color: "var(--ed-ink-soft)", fontStyle: "italic" }}>
                       No se registraron ejercicios en esta sesión.
                     </td>
                   </tr>

@@ -1,0 +1,1 @@
+- [Audiencia por juego](audiencia_por_juego.md) — la audiencia por defecto del repo es 6-8 años, pero `juegos/fracciones/` es 9-12.

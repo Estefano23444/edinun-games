@@ -1,110 +1,113 @@
-// game-screens.jsx — Juego de Patrones numéricos (1 nivel, 3 rondas escalonadas).
-// Audiencia 9 años (excepción al default 6-8 del repo).
+// game-screens.jsx — Juego de Números primos (1 nivel, 3 rondas con
+// mecánicas distintas).
+// Audiencia 10 años (excepción al default 6-8 del repo).
 
 const { useState: useStateG, useEffect: useEffectG, useRef: useRefG, useMemo: useMemoG } = React;
 
-// Portal a <body> para sacar overlays/modales del scope del DeviceStage,
-// que aplica `transform: scale()` al lienzo 900×540. Sin esto, un
-// `position: fixed` o `absolute` con `inset: 0` solo cubre el área del
-// lienzo escalado y deja los laterales del letterboxing sin oscurecer.
+// Portal a <body> para sacar overlays/modales del scope del DeviceStage.
 function PortalToBody({ children }) {
   return ReactDOM.createPortal(children, document.body);
 }
 
 // ─────────────────────────────────────────────────────────────
-// Generador de problemas — 1 categoría ("patrones"), 3 rondas.
-//   idx 0 → suma o resta (paso aditivo ±2..±11)
-//   idx 1 → multiplicación geométrica real · factor 2..5
-//   idx 2 → división geométrica real · factor 2..5
-//
-// Restricciones:
-// - Solo números naturales (≥ 1) en TODOS los términos.
-// - Tope 999 (3 cifras máximo). 5⁴ = 625 es el factor máximo viable.
-// - Para variedad, el `start` de cada secuencia se sortea entre todos
-//   los enteros que mantienen el último término ≤ 999 (mult) o
-//   primer término ≤ 999 (div). Ej: ×2 puede arrancar en 7 → 7,14,28,56,112.
-// - `excludeFactor` permite que la división no use el mismo factor que
-//   la multiplicación de la misma sesión (evita "todo del 8" repetido).
-//
-// `easy` modula el rango. Easy → factor pool {2,3}; Hard → {4,5}.
-// Suma/resta easy → paso 2..5; hard → 6..11.
-// El llamador (GameScreen) sortea al inicio de la sesión cuál de las
-// 3 rondas será la fácil — las otras dos serán difíciles.
+// Helpers de primalidad y factorización.
 // ─────────────────────────────────────────────────────────────
-function makeProblem(cat, idx = 0, easy = false, excludeFactor = null) {
+function isPrime(n) {
+  if (n < 2) return false;
+  if (n === 2) return true;
+  if (n % 2 === 0) return false;
+  for (let i = 3; i * i <= n; i += 2) {
+    if (n % i === 0) return false;
+  }
+  return true;
+}
+
+function primeFactors(n) {
+  const factors = [];
+  let m = n;
+  let p = 2;
+  while (m > 1) {
+    while (m % p === 0) {
+      factors.push(p);
+      m /= p;
+    }
+    p++;
+  }
+  return factors;
+}
+
+// Pools precomputados.
+const PRIMES_2_80 = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79];
+const COMPOSITES_2_80 = [];
+for (let i = 4; i <= 80; i++) {
+  if (!isPrime(i)) COMPOSITES_2_80.push(i);
+}
+// Compuestos no triviales (excluir múltiplos de 10) para ronda 2.
+const NON_TRIVIAL_COMPOSITES = COMPOSITES_2_80.filter((n) => n >= 10 && n % 10 !== 0);
+// Pool de números para factorizar (cap 4 factores).
+const FACTOR_POOL = [
+  12, 14, 15, 18, 20, 21, 24, 28, 30, 35, 36, 42, 45,
+  50, 54, 56, 60, 63, 70, 75, 84, 90, 100,
+];
+
+// ─────────────────────────────────────────────────────────────
+// Generador de problemas — 1 categoría ("primos"), 3 rondas.
+//   idx 0 → ¿primo o compuesto? (binary tap)
+//   idx 1 → ¿cuál es el primo? (4 opciones)
+//   idx 2 → descomposición en factores primos (numpad + ×)
+// ─────────────────────────────────────────────────────────────
+function makeProblem(cat, idx = 0) {
   const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
 
-  function pickBlanks(len, count) {
-    // Posiciones candidatas: intermedias (1..len-2). Nunca el primer ni el
-    // último término — el chico necesita referencias en ambos extremos.
-    const cands = [];
-    for (let i = 1; i <= len - 2; i++) cands.push(i);
-    for (let i = cands.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [cands[i], cands[j]] = [cands[j], cands[i]];
-    }
-    return cands.slice(0, count).sort((a, b) => a - b);
-  }
-
-  // Todas las secuencias tienen 5 términos y 2 huecos.
-  const len = 5;
-  const blankCount = 2;
-
   if (idx === 0) {
-    // Suma o resta. Easy → paso 2..5; Hard → paso 6..11.
-    const isAdd = Math.random() < 0.5;
-    const step = easy ? rand(2, 5) : rand(6, 11);
-    if (isAdd) {
-      const start = rand(1, 25);
-      const terms = Array.from({ length: len }, (_, i) => start + i * step);
-      return { type: "patrones", idx, op: "+", step, terms, blanks: pickBlanks(len, blankCount) };
-    } else {
-      // Asegurar que el último término sea ≥ 1: start - (len-1)*step ≥ 1.
-      const minStart = (len - 1) * step + 1;
-      const start = rand(minStart, minStart + 25);
-      const terms = Array.from({ length: len }, (_, i) => start - i * step);
-      return { type: "patrones", idx, op: "−", step, terms, blanks: pickBlanks(len, blankCount) };
-    }
-  }
-
-  // Pool de factores según dificultad. Tope 5 para mantener ≤ 999 (5⁴=625).
-  const easyPool = [2, 3];
-  const hardPool = [4, 5];
-  function pickFactor() {
-    let pool = easy ? easyPool.slice() : hardPool.slice();
-    if (excludeFactor !== null) {
-      const filtered = pool.filter((f) => f !== excludeFactor);
-      if (filtered.length > 0) pool = filtered;
-    }
-    return pool[rand(0, pool.length - 1)];
+    // Mezcla 50/50 primos vs compuestos en rango 2..80.
+    const isP = Math.random() < 0.5;
+    const pool = isP ? PRIMES_2_80 : COMPOSITES_2_80;
+    const n = pool[rand(0, pool.length - 1)];
+    return {
+      type: "primos", idx,
+      number: n,
+      isPrime: isP,
+    };
   }
 
   if (idx === 1) {
-    // Multiplicación geométrica real: cada término = anterior × factor.
-    // Secuencia: start, start·F, start·F², start·F³, start·F⁴.
-    // start variable (1..⌊999/F⁴⌋) para variedad: ×2 admite hasta start=62.
-    const factor = pickFactor();
-    const maxStart = Math.max(1, Math.floor(999 / Math.pow(factor, len - 1)));
-    const start = rand(1, maxStart);
-    const terms = Array.from({ length: len }, (_, i) => start * Math.pow(factor, i));
-    return { type: "patrones", idx, op: "×", step: factor, terms, blanks: pickBlanks(len, blankCount) };
+    // 4 números, uno solo es primo. Compuestos no triviales.
+    const primesInRange = PRIMES_2_80.filter((p) => p >= 10);
+    const correct = primesInRange[rand(0, primesInRange.length - 1)];
+    // Elegir 3 compuestos distintos.
+    const distractorsPool = NON_TRIVIAL_COMPOSITES.slice();
+    // Shuffle Fisher-Yates parcial.
+    for (let i = distractorsPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [distractorsPool[i], distractorsPool[j]] = [distractorsPool[j], distractorsPool[i]];
+    }
+    const distractors = distractorsPool.slice(0, 3);
+    const options = [correct, ...distractors];
+    // Shuffle posiciones.
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [options[i], options[j]] = [options[j], options[i]];
+    }
+    return {
+      type: "primos", idx,
+      options,
+      correct,
+    };
   }
 
-  // idx === 2 — División geométrica real: cada término = anterior ÷ divisor.
-  // Para que TODOS los términos sean enteros y el último ≥ 1, el primer
-  // término debe ser múltiplo de divisor⁴. Sorteamos un múltiplo aleatorio
-  // dentro del rango que cabe en 999.
-  const divisor = pickFactor();
-  const baseDiv = Math.pow(divisor, len - 1);
-  const maxMultiplier = Math.max(1, Math.floor(999 / baseDiv));
-  const multiplier = rand(1, maxMultiplier);
-  const start = baseDiv * multiplier;
-  const terms = Array.from({ length: len }, (_, i) => start / Math.pow(divisor, i));
-  return { type: "patrones", idx, op: "÷", step: divisor, terms, blanks: pickBlanks(len, blankCount) };
+  // idx === 2 — Descomposición en factores primos.
+  const n = FACTOR_POOL[rand(0, FACTOR_POOL.length - 1)];
+  const factors = primeFactors(n);
+  return {
+    type: "primos", idx,
+    number: n,
+    factors, // ej: [2, 3, 7] para 42
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
-// Slot de un solo dígito.
+// Slot de un dígito (ronda 3).
 // ─────────────────────────────────────────────────────────────
 function SlotBox({ value, feedback, size = 50 }) {
   const filled = value !== "" && value !== undefined;
@@ -137,33 +140,35 @@ function SlotBox({ value, feedback, size = 50 }) {
 // ─────────────────────────────────────────────────────────────
 const ENCOURAGEMENTS = [
   "¡Casi! Sigue intentándolo.",
-  "Cada patrón tiene su regla.",
+  "Recuerda: un primo solo se divide por 1 y por sí mismo.",
   "¡La próxima es tuya!",
   "Equivocarse también es aprender.",
-  "Mira de nuevo cómo cambian los números.",
+  "Mira de nuevo los divisores.",
   "¡Vamos al siguiente reto!",
   "Cada error te acerca al acierto.",
 ];
 
 // ─────────────────────────────────────────────────────────────
-// PANTALLA DE JUEGO — 3 rondas escalonadas por idx
+// PANTALLA DE JUEGO — 3 rondas con mecánicas distintas
 // ─────────────────────────────────────────────────────────────
 function GameScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
-  const cat = app.currentCategory || "patrones";
-  const catLabel = app.currentCatLabel || "Patrones numéricos";
+  const cat = app.currentCategory || "primos";
+  const catLabel = app.currentCatLabel || "Números primos";
 
-  // Sorteo al inicio de la sesión: cuál ronda (0, 1 o 2) es la "fácil".
-  // Las otras dos serán "difíciles". Con cada partida cambia.
-  const easyRound = useRefG(Math.floor(Math.random() * 3));
-  // Factor de la multiplicación (idx 1) — para que la división (idx 2) lo
-  // excluya y nunca compartan factor en la misma sesión.
-  const multFactor = useRefG(null);
+  const [problem, setProblem] = useStateG(() => makeProblem(cat, 0));
 
-  const [problem, setProblem] = useStateG(() => makeProblem(cat, 0, 0 === easyRound.current));
-
-  // Por cada hueco, un array de slots (largo = String(answer).length).
-  const [blankInputs, setBlankInputs] = useStateG([]);
+  // Estado de ronda 3 (descomposición guiada paso a paso):
+  // - currentN: el número que toca dividir AHORA. Empieza en problem.number
+  //   y se va dividiendo con cada factor primo correcto.
+  // - steps: lista de pasos completados {dividend, divisor, quotient}.
+  //   Se renderizan como escalera de divisiones (más tenue) sobre la fila
+  //   activa.
+  // - slot: input actual del chico (1 dígito — todos los factores del pool
+  //   son 2/3/5/7).
+  const [currentN, setCurrentN] = useStateG(0);
+  const [steps, setSteps] = useStateG([]);
+  const [slot, setSlot] = useStateG("");
 
   const [elapsed, setElapsed] = useStateG(0);
   const [stars, setStars] = useStateG(0);
@@ -173,19 +178,22 @@ function GameScreen({ app, setApp, go }) {
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
   const [confirmingExit, setConfirmingExit] = useStateG(false);
+  const [confirmingRestart, setConfirmingRestart] = useStateG(false);
   const [log, setLog] = useStateG([]);
 
   const started = useRefG(Date.now());
   const exerciseStart = useRefG(Date.now());
 
-  // Reset de inputs al cambiar de problema (y en el primer render).
+  // Reset al cambiar de problema. Solo aplica a ronda 3.
   useEffectG(() => {
-    if (problem.type === "patrones") {
-      const arr = problem.blanks.map((bi) => {
-        const len = String(problem.terms[bi]).length;
-        return Array(len).fill("");
-      });
-      setBlankInputs(arr);
+    if (problem.idx === 2) {
+      setCurrentN(problem.number);
+      setSteps([]);
+      setSlot("");
+    } else {
+      setCurrentN(0);
+      setSteps([]);
+      setSlot("");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problem]);
@@ -198,59 +206,103 @@ function GameScreen({ app, setApp, go }) {
     return () => clearInterval(id);
   }, []);
 
-  function pressDigit(d) {
-    // Buscar el primer slot vacío en orden de huecos (izq→der).
-    for (let bi = 0; bi < blankInputs.length; bi++) {
-      const slot = blankInputs[bi];
-      const emptyIdx = slot.findIndex((x) => x === "");
-      if (emptyIdx !== -1) {
-        // No leading zero — solo naturales, ningún término empieza con 0.
-        if (emptyIdx === 0 && d === "0") return;
-        const next = blankInputs.map((arr) => [...arr]);
-        next[bi][emptyIdx] = d;
-        setBlankInputs(next);
-        return;
-      }
+  // Resolver una ronda (ronda 1 y 2 — tap directo).
+  function answerTap(userValue) {
+    if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
+
+    let isCorrect = false;
+    let entry = {};
+
+    if (problem.idx === 0) {
+      // Ronda 1: userValue = "PRIMO" o "COMPUESTO"
+      const correctLabel = problem.isPrime ? "PRIMO" : "COMPUESTO";
+      isCorrect = userValue === correctLabel;
+      entry = {
+        a: String(problem.number),
+        b: correctLabel,
+        op: "=",
+        correctAnswer: correctLabel,
+        userAnswer: userValue,
+      };
+    } else if (problem.idx === 1) {
+      // Ronda 2: userValue = número elegido
+      isCorrect = userValue === problem.correct;
+      entry = {
+        a: problem.options.join(", "),
+        b: "primo",
+        op: "→",
+        correctAnswer: String(problem.correct),
+        userAnswer: String(userValue),
+      };
     }
+
+    finalize(isCorrect, entry);
   }
 
-  function eraseLast() {
-    // Borra el último dígito ingresado (último blank, posición de la derecha).
-    for (let bi = blankInputs.length - 1; bi >= 0; bi--) {
-      const slot = blankInputs[bi];
-      for (let i = slot.length - 1; i >= 0; i--) {
-        if (slot[i] !== "") {
-          const next = blankInputs.map((arr) => [...arr]);
-          next[bi][i] = "";
-          setBlankInputs(next);
-          return;
-        }
-      }
-    }
-  }
-
+  // Resolver ronda 3 — un paso de la descomposición guiada.
+  // El chico escribe UN factor primo a la vez; cada paso correcto avanza
+  // (currentN se divide). Cuando currentN = 1, el ejercicio termina.
+  // Mistakes en el medio son transitorios (no fallan el ejercicio); solo
+  // limpian el slot y permiten reintentar. La penalización es por tiempo.
   function verify() {
-    // Todos los slots de todos los huecos deben estar llenos.
-    const allFilled = blankInputs.length > 0 && blankInputs.every((slot) => slot.length > 0 && slot.every((x) => x !== ""));
-    if (!allFilled) {
+    if (problem.idx !== 2) return;
+
+    if (slot === "") {
       setFeedback("err");
-      setFeedbackMsg("Completa los casilleros");
+      setFeedbackMsg("Escribe un factor primo");
       setTimeout(() => { setFeedback(null); setFeedbackMsg(""); }, 700);
       return;
     }
 
-    // Comparar cada hueco con el término correcto.
-    let isCorrect = true;
-    const userVals = [];
-    for (let bi = 0; bi < blankInputs.length; bi++) {
-      const userVal = parseInt(blankInputs[bi].join(""), 10);
-      userVals.push(userVal);
-      const correctVal = problem.terms[problem.blanks[bi]];
-      if (userVal !== correctVal) isCorrect = false;
+    const p = parseInt(slot, 10);
+    const valid = isPrime(p) && currentN % p === 0;
+
+    if (!valid) {
+      // Error transitorio: feedback breve y limpiar el slot. NO avanza,
+      // NO finaliza el ejercicio. El chico vuelve a intentar.
+      setFeedback("err");
+      const reason = !isPrime(p)
+        ? `${p} no es un primo`
+        : `${p} no divide a ${currentN}`;
+      setFeedbackMsg(reason);
+      setTimeout(() => {
+        setFeedback(null);
+        setFeedbackMsg("");
+        setSlot("");
+      }, 1100);
+      return;
     }
 
-    if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
+    // Paso válido: dividir y avanzar.
+    const quotient = currentN / p;
+    const newSteps = [...steps, { dividend: currentN, divisor: p, quotient }];
+    setSteps(newSteps);
+    setSlot("");
 
+    if (quotient === 1) {
+      // Descomposición completa — finalizar el ejercicio como CORRECTO.
+      if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
+      const userFactors = newSteps.map((s) => s.divisor);
+      const entry = {
+        a: String(problem.number),
+        b: problem.factors.join("×"),
+        op: "=",
+        correctAnswer: problem.factors.join("×"),
+        userAnswer: userFactors.join("×"),
+      };
+      finalize(true, entry);
+    } else {
+      // Quedan más factores — actualizar currentN y dejar que el chico
+      // siga. Feedback verde corto para reforzar el acierto.
+      setCurrentN(quotient);
+      setFeedback("ok");
+      setFeedbackMsg(`${p} ✓`);
+      setTimeout(() => { setFeedback(null); setFeedbackMsg(""); }, 600);
+    }
+  }
+
+  // Finalizar el ejercicio: actualizar stats, log, navegar.
+  function finalize(isCorrect, partialEntry) {
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
 
@@ -259,23 +311,9 @@ function GameScreen({ app, setApp, go }) {
     const newStarsSession = starsSession + earned;
     const newStarsTotal = stars + earned;
 
-    // Adaptación del log: la "operación" es la secuencia con huecos visible,
-    // el paso (b) describe la regla, correctAnswer son los valores correctos.
-    const seqDisplay = problem.terms.map((t, i) =>
-      problem.blanks.indexOf(i) === -1 ? String(t) : "?"
-    ).join(", ");
-    const correctVals = problem.blanks.map((bi) => problem.terms[bi]);
-    const stepStr = (problem.op === "+" || problem.op === "−")
-      ? `${problem.op}${problem.step}`
-      : `${problem.op}${problem.step}`;
-
     const entry = {
       idx: newAttempted,
-      a: seqDisplay,
-      b: stepStr,
-      op: "→",
-      correctAnswer: correctVals.join(", "),
-      userAnswer: userVals.join(", "),
+      ...partialEntry,
       isCorrect,
       time: exerciseSec,
       earned,
@@ -313,16 +351,25 @@ function GameScreen({ app, setApp, go }) {
         window.incrementGamesCompleted && window.incrementGamesCompleted();
         go("results");
       } else {
-        // Capturar el factor de la multiplicación (problema actual idx=1)
-        // para que la siguiente división (idx=2) lo excluya.
-        if (problem.idx === 1) multFactor.current = problem.step;
-
-        // newAttempted = índice del PRÓXIMO ejercicio (1 o 2).
-        const exclude = newAttempted === 2 ? multFactor.current : null;
-        setProblem(makeProblem(cat, newAttempted, newAttempted === easyRound.current, exclude));
+        setProblem(makeProblem(cat, newAttempted));
         exerciseStart.current = Date.now();
       }
     }, wait);
+  }
+
+  // Numpad ronda 3: 1 slot único. El chico escribe el factor primo del
+  // paso actual. El slot soporta hasta 1 dígito (todos los factores del
+  // pool son 2/3/5/7).
+  function pressDigit(d) {
+    if (problem.idx !== 2) return;
+    // Sin leading zero — los primos siempre arrancan con dígito ≥ 2.
+    if (slot === "" && (d === "0" || d === "1")) return;
+    if (slot === "") setSlot(d);
+  }
+
+  function eraseLast() {
+    if (problem.idx !== 2) return;
+    if (slot !== "") setSlot("");
   }
 
   function formatTime(s) {
@@ -331,47 +378,41 @@ function GameScreen({ app, setApp, go }) {
     return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   }
 
-  const bocadilloText = "Descubre la regla del patrón.";
-  const instructionText = "Completa el patrón";
-  const tipoLabel = problem.op === "+" || problem.op === "−"
-    ? "SUMA O RESTA"
-    : problem.op === "×"
-      ? "MULTIPLICACIÓN"
-      : "DIVISIÓN";
+  // Reiniciar el juego desde cero — disponible solo en rondas 1 y 2.
+  // Resetea todo: stats, log, cronómetro y vuelve a sortear ronda 1.
+  function restartGame() {
+    setConfirmingRestart(false);
+    setAttempted(0);
+    setSolved(0);
+    setStars(0);
+    setStarsSession(0);
+    setFeedback(null);
+    setFeedbackMsg("");
+    setLog([]);
+    setSlot("");
+    setSteps([]);
+    setCurrentN(0);
+    setProblem(makeProblem(cat, 0));
+    started.current = Date.now();
+    exerciseStart.current = Date.now();
+  }
 
-  // Tile width / fontSize según largo del término. Para factores grandes
-  // (×10 con term=10000) los números deben encogerse para que la fila quepa
-  // en el wrapper de 580 sin overflow.
-  function termTileWidth(t) {
-    const len = String(t).length;
-    if (len <= 2) return Math.max(48, len * 26 + 18);
-    if (len === 3) return 78;
-    if (len === 4) return 96;
-    return 116; // 5+ dígitos
-  }
-  function termFontSize(t) {
-    const len = String(t).length;
-    if (len <= 2) return 40;
-    if (len === 3) return 34;
-    if (len === 4) return 28;
-    return 24;
-  }
-  // Slot size adaptativo según largo del valor del hueco.
-  function slotSize(slotsLen) {
-    if (slotsLen <= 2) return 44;
-    if (slotsLen === 3) return 38;
-    return 32; // 4-5 dígitos
-  }
+  const bocadilloText = "Encuentra los primos.";
+  const instructionByIdx = [
+    "¿Primo o compuesto?",
+    "¿Cuál es el primo?",
+    "Descompón en factores primos",
+  ];
+  const instructionText = instructionByIdx[problem.idx] || "";
 
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-      {/* HUD superior — sin tabs de nivel (juego de nivel único). */}
+      {/* HUD superior */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <EdinunLogoMini size={64} />
         </div>
 
-        {/* Centro: catLabel discreto en lugar de tabs */}
         <div style={{
           position: "absolute", left: "50%", top: "50%",
           transform: "translate(-50%, -50%)",
@@ -416,7 +457,7 @@ function GameScreen({ app, setApp, go }) {
         ))}
       </div>
 
-      {/* Bocadillo de pista */}
+      {/* Bocadillo */}
       <div data-qa="bocadillo" style={{
         position: "absolute", left: 14, top: 130, width: 215,
         pointerEvents: "none",
@@ -466,7 +507,7 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* ══════ ZONA CENTRAL — secuencia con huecos ══════ */}
+      {/* ══════ ZONA CENTRAL — varía según ronda ══════ */}
       <div data-qa="zona-central" style={{
         position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
         width: 580, height: 340,
@@ -474,119 +515,224 @@ function GameScreen({ app, setApp, go }) {
         alignItems: "center", justifyContent: "space-evenly",
         textAlign: "center",
       }}>
-        <div>
-          <div style={{
-            fontFamily: "var(--ed-font-display)", fontWeight: 700,
-            fontSize: 26, lineHeight: 1.1,
-            color: "#fff", marginBottom: 8,
-            textShadow: "0 2px 6px rgba(0,0,0,0.45)",
-          }}>
-            {instructionText}
-          </div>
-          <div style={{
-            fontFamily: "var(--ed-font-mono)", fontSize: 12,
-            color: "rgba(255,255,255,0.6)", letterSpacing: "0.1em",
-            textTransform: "uppercase",
-          }}>
-            {tipoLabel}
-          </div>
+        <div style={{
+          fontFamily: "var(--ed-font-display)", fontWeight: 700,
+          fontSize: 26, lineHeight: 1.1,
+          color: "#fff",
+          textShadow: "0 2px 6px rgba(0,0,0,0.45)",
+        }}>
+          {instructionText}
         </div>
 
-        {/* Secuencia — términos separados por comas para diferenciarlos. */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          flexWrap: "nowrap",
-        }}>
-          {problem.terms.map((t, i) => {
-            const blankIdx = problem.blanks.indexOf(i);
-            const isLast = i === problem.terms.length - 1;
-            // Término visible o hueco con slots
-            const cell = blankIdx === -1 ? (
-              <div style={{
-                minWidth: termTileWidth(t),
-                padding: "10px 6px",
-                fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                fontSize: termFontSize(t), lineHeight: 1, color: "#fce9a8",
-                textShadow: "0 0 12px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
-                textAlign: "center",
-              }}>
-                {t}
-              </div>
-            ) : (() => {
-              const slots = blankInputs[blankIdx] || [];
-              const slotsLen = slots.length || String(problem.terms[i]).length;
-              const ss = slotSize(slotsLen);
-              return (
-                <div style={{ display: "flex", gap: 4 }}>
-                  {Array.from({ length: slotsLen }).map((_, j) => (
-                    <SlotBox key={j} value={slots[j] || ""} feedback={feedback} size={ss} />
-                  ))}
-                </div>
-              );
-            })();
+        {/* Ronda 1 — número grande + 2 botones */}
+        {problem.idx === 0 && (
+          <>
+            <div style={{
+              fontFamily: "var(--ed-font-display)", fontWeight: 700,
+              fontSize: 100, lineHeight: 1, color: "#fce9a8",
+              textShadow: "0 0 20px rgba(252,233,168,0.45), 0 4px 12px rgba(0,0,0,0.5)",
+              padding: "10px 30px",
+              borderRadius: 18,
+              border: "2px solid rgba(252,233,168,0.4)",
+              background: "rgba(10,6,35,0.5)",
+              minWidth: 180,
+            }}>
+              {problem.number}
+            </div>
+            <div style={{ display: "flex", gap: 24 }}>
+              <button
+                onClick={() => answerTap("PRIMO")}
+                disabled={feedback !== null}
+                style={{
+                  fontFamily: "var(--ed-font-display)", fontWeight: 800,
+                  fontSize: 22, letterSpacing: "0.06em",
+                  padding: "16px 40px",
+                  borderRadius: 14,
+                  border: "2.5px solid #4fd8ff",
+                  background: "linear-gradient(180deg, rgba(79,216,255,0.2), rgba(79,216,255,0.08))",
+                  color: "#fff",
+                  cursor: feedback !== null ? "not-allowed" : "pointer",
+                  boxShadow: "0 6px 18px rgba(79,216,255,0.35)",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                  opacity: feedback !== null ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => feedback === null && (e.currentTarget.style.transform = "translateY(-2px)")}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = "none")}
+              >
+                PRIMO
+              </button>
+              <button
+                onClick={() => answerTap("COMPUESTO")}
+                disabled={feedback !== null}
+                style={{
+                  fontFamily: "var(--ed-font-display)", fontWeight: 800,
+                  fontSize: 22, letterSpacing: "0.06em",
+                  padding: "16px 40px",
+                  borderRadius: 14,
+                  border: "2.5px solid #f5a623",
+                  background: "linear-gradient(180deg, rgba(245,166,35,0.22), rgba(245,166,35,0.08))",
+                  color: "#fff",
+                  cursor: feedback !== null ? "not-allowed" : "pointer",
+                  boxShadow: "0 6px 18px rgba(245,166,35,0.35)",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                  opacity: feedback !== null ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => feedback === null && (e.currentTarget.style.transform = "translateY(-2px)")}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = "none")}
+              >
+                COMPUESTO
+              </button>
+            </div>
+          </>
+        )}
 
+        {/* Ronda 2 — 4 números clickeables.
+            Ancho contenido a 420 px (originalmente 520) para no
+            superponer con el personaje a la izquierda (que llega a
+            ~228 px) ni con la columna de acciones a la derecha
+            (que arranca en ~732 px). */}
+        {problem.idx === 1 && (
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 14, width: 420,
+          }}>
+            {problem.options.map((n, i) => (
+              <button
+                key={i}
+                onClick={() => answerTap(n)}
+                disabled={feedback !== null}
+                style={{
+                  fontFamily: "var(--ed-font-display)", fontWeight: 700,
+                  fontSize: 44, lineHeight: 1,
+                  padding: "16px 0",
+                  borderRadius: 14,
+                  border: "2px solid rgba(252,233,168,0.5)",
+                  background: "rgba(10,6,35,0.55)",
+                  color: "#fce9a8",
+                  cursor: feedback !== null ? "not-allowed" : "pointer",
+                  textShadow: "0 0 14px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+                  opacity: feedback !== null ? 0.55 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (feedback === null) {
+                    e.currentTarget.style.transform = "translateY(-3px)";
+                    e.currentTarget.style.borderColor = "#4fd8ff";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.borderColor = "rgba(252,233,168,0.5)";
+                }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Ronda 3 — escalera de divisiones paso a paso.
+            Pasos completados se renderizan tenues encima; la fila activa
+            (currentN ÷ [_] = ?) está resaltada en dorado. */}
+        {problem.idx === 2 && (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            fontFamily: "var(--ed-font-display)", fontWeight: 700,
+          }}>
+            {steps.map((s, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                fontSize: 24, color: "rgba(252,233,168,0.55)",
+                lineHeight: 1.1,
+              }}>
+                <span style={{ minWidth: 56, textAlign: "right" }}>{s.dividend}</span>
+                <span>÷</span>
+                <span style={{ minWidth: 32, textAlign: "center", color: "#fce9a8" }}>{s.divisor}</span>
+                <span>=</span>
+                <span style={{ minWidth: 56, textAlign: "left" }}>{s.quotient}</span>
+              </div>
+            ))}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              fontSize: 38, color: "#fce9a8",
+              textShadow: "0 0 12px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.45)",
+              padding: "6px 0",
+              marginTop: steps.length > 0 ? 4 : 0,
+            }}>
+              <span style={{ minWidth: 80, textAlign: "right" }}>{currentN}</span>
+              <span>÷</span>
+              <SlotBox value={slot} feedback={feedback} size={48} />
+              <span>=</span>
+              <span style={{ minWidth: 60, textAlign: "left", color: "rgba(252,233,168,0.55)" }}>?</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Numpad — solo en ronda 3 */}
+      {problem.idx === 2 && (
+        <div data-qa="bandeja" style={{
+          position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)",
+          display: "grid", gridTemplateColumns: "repeat(10, 60px)", gap: 8,
+        }}>
+          {["1","2","3","4","5","6","7","8","9","0"].map((d, i) => {
+            const color = ["#ef5a5a","#f5a623","#f5d84b","#4fa0ff","#2ecc8f"][i % 5];
             return (
-              <React.Fragment key={i}>
-                {cell}
-                {!isLast && (
-                  <span style={{
-                    fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                    fontSize: 32, lineHeight: 1, color: "#fce9a8",
-                    transform: "translateY(8px)",
-                    padding: "0 1px",
-                  }}>,</span>
-                )}
-              </React.Fragment>
+              <button
+                key={d}
+                className="ed-numpad-key"
+                onClick={() => pressDigit(d)}
+                style={{
+                  height: 64, fontSize: 30,
+                  borderColor: color,
+                  borderWidth: 2, borderStyle: "solid",
+                  cursor: "pointer",
+                }}
+                title="Toca para colocar"
+              >
+                {d}
+              </button>
             );
           })}
         </div>
-      </div>
+      )}
 
-      {/* Numpad — bandeja inferior */}
-      <div data-qa="bandeja" style={{
-        position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)",
-        display: "grid", gridTemplateColumns: "repeat(10, 60px)", gap: 8,
-      }}>
-        {["1","2","3","4","5","6","7","8","9","0"].map((d, i) => {
-          const color = ["#ef5a5a","#f5a623","#f5d84b","#4fa0ff","#2ecc8f"][i % 5];
-          return (
-            <button
-              key={d}
-              className="ed-numpad-key"
-              onClick={() => pressDigit(d)}
-              style={{
-                height: 64, fontSize: 30,
-                borderColor: color,
-                borderWidth: 2, borderStyle: "solid",
-                cursor: "pointer",
-              }}
-              title="Toca para colocar"
-            >
-              {d}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Botones de acción */}
+      {/* Botones de acción — laterales derechos.
+          Ronda 1 y 2: REINICIAR + SALIR.
+          Ronda 3: VERIFICAR + BORRAR + SALIR. */}
       <div data-qa="acciones" style={{
         position: "absolute", right: 18, top: "50%", transform: "translateY(-50%)",
         display: "flex", flexDirection: "column", gap: 12, width: 150,
       }}>
-        <button
-          className="ed-btn ed-btn-verify"
-          onClick={verify}
-          style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
-        >
-          ¡VERIFICAR!
-        </button>
-        <button
-          className="ed-btn ed-btn-erase"
-          onClick={eraseLast}
-          style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
-        >
-          BORRAR
-        </button>
+        {problem.idx === 2 && (
+          <>
+            <button
+              className="ed-btn ed-btn-verify"
+              onClick={verify}
+              style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
+            >
+              ¡VERIFICAR!
+            </button>
+            <button
+              className="ed-btn ed-btn-erase"
+              onClick={eraseLast}
+              style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
+            >
+              BORRAR
+            </button>
+          </>
+        )}
+        {problem.idx < 2 && (
+          <button
+            className="ed-btn ed-btn-erase"
+            onClick={() => setConfirmingRestart(true)}
+            title="Reiniciar el juego"
+            style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
+          >
+            REINICIAR
+          </button>
+        )}
         <button
           className="ed-btn ed-btn-ghost"
           onClick={() => setConfirmingExit(true)}
@@ -630,6 +776,47 @@ function GameScreen({ app, setApp, go }) {
                 {feedback === "ok" ? feedbackMsg : `${feedbackMsg} — ${char.name}`}
               </div>
             )}
+          </div>
+        </PortalToBody>
+      )}
+
+      {/* Modal REINICIAR */}
+      {confirmingRestart && (
+        <PortalToBody>
+          <div
+            onClick={() => setConfirmingRestart(false)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 1000,
+              background: "rgba(0,0,0,0.62)",
+              backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              animation: "ed-pop-in 0.18s",
+              padding: 16,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="ed-card"
+              style={{ padding: 24, maxWidth: 440, textAlign: "center", boxShadow: "var(--ed-shadow-card), 0 0 40px rgba(245,166,35,0.3)" }}
+            >
+              <div className="ed-label" style={{ color: "#f5a623", marginBottom: 6 }}>
+                Reiniciar el juego
+              </div>
+              <h2 className="ed-h1" style={{ fontSize: 22, lineHeight: 1.15, marginBottom: 8 }}>
+                ¿Empezar de nuevo?
+              </h2>
+              <p className="ed-body" style={{ marginBottom: 16, fontSize: 14 }}>
+                Vas a perder el progreso de esta ronda ({attempted}/3 ejercicios) y empezarás otra vez desde la primera ronda.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <button className="ed-btn ed-btn-ghost" onClick={() => setConfirmingRestart(false)} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+                  SEGUIR JUGANDO
+                </button>
+                <button className="ed-btn ed-btn-primary" onClick={restartGame} style={{ height: 44, fontWeight: 800, letterSpacing: "0.04em" }}>
+                  SÍ, REINICIAR
+                </button>
+              </div>
+            </div>
           </div>
         </PortalToBody>
       )}
@@ -679,7 +866,7 @@ function GameScreen({ app, setApp, go }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// PANTALLA DE RESULTADOS — sin cambios estructurales
+// PANTALLA DE RESULTADOS
 // ─────────────────────────────────────────────────────────────
 function formatOp(e) {
   return `${e.a} ${e.op} ${e.b}`;
@@ -758,8 +945,7 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
           <thead>
             <tr style={printStyles.thHead}>
               <th style={printStyles.th}>#</th>
-              <th style={printStyles.th}>Secuencia</th>
-              <th style={{ ...printStyles.th, ...printStyles.thR }}>Regla</th>
+              <th style={printStyles.th}>Enunciado</th>
               <th style={{ ...printStyles.th, ...printStyles.thR }}>Respuesta del estudiante</th>
               <th style={{ ...printStyles.th, ...printStyles.thR }}>Resultado correcto</th>
               <th style={{ ...printStyles.th, ...printStyles.thC }}>Estado</th>
@@ -771,7 +957,6 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
               <tr key={e.idx} style={printStyles.tr}>
                 <td style={{ ...printStyles.td, ...printStyles.tdNum }}>{e.idx}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdOp }}>{e.a}</td>
-                <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.b}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.userAnswer}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdR }}>{e.correctAnswer}</td>
                 <td style={{ ...printStyles.td, ...printStyles.tdC, ...(e.isCorrect ? printStyles.tdOk : printStyles.tdErr) }}>
@@ -781,7 +966,7 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
               </tr>
             ))}
             {log.length === 0 && (
-              <tr><td colSpan={7} style={printStyles.tdEmpty}>No se registraron ejercicios en esta sesión.</td></tr>
+              <tr><td colSpan={6} style={printStyles.tdEmpty}>No se registraron ejercicios en esta sesión.</td></tr>
             )}
           </tbody>
         </table>
@@ -813,7 +998,7 @@ function PrintableReport({ studentName, res, dateStr, m, s, attemptedCount, tota
 
 function ResultsScreen({ app, setApp, go }) {
   const char = CHARACTERS.find((c) => c.id === app.character) || CHARACTERS[0];
-  const res = app.lastResult || { category: "Patrones numéricos", solved: 0, total: 3, time: 0, starsEarned: 0, log: [] };
+  const res = app.lastResult || { category: "Números primos", solved: 0, total: 3, time: 0, starsEarned: 0, log: [] };
   const m = Math.floor(res.time / 60), s = res.time % 60;
   const totalEx = res.total || 3;
   const attemptedCount = (res.log || []).length;
@@ -888,8 +1073,7 @@ function ResultsScreen({ app, setApp, go }) {
                   borderBottom: "1px solid rgba(148,120,255,0.3)",
                 }}>
                   <th style={{ textAlign: "left", padding: "6px 8px", width: 36 }}>#</th>
-                  <th style={{ textAlign: "left", padding: "6px 8px" }}>Secuencia</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px" }}>Regla</th>
+                  <th style={{ textAlign: "left", padding: "6px 8px" }}>Enunciado</th>
                   <th style={{ textAlign: "right", padding: "6px 8px" }}>Respuesta del estudiante</th>
                   <th style={{ textAlign: "right", padding: "6px 8px" }}>Respuesta correcta</th>
                   <th style={{ textAlign: "center", padding: "6px 8px" }}>Estado</th>
@@ -901,7 +1085,6 @@ function ResultsScreen({ app, setApp, go }) {
                   <tr key={e.idx} style={{ borderBottom: "1px solid rgba(148,120,255,0.18)" }}>
                     <td style={{ padding: "8px 8px", color: "var(--ed-ink-soft)" }}>{e.idx}</td>
                     <td style={{ padding: "8px 8px", fontWeight: 600 }}>{e.a}</td>
-                    <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.b}</td>
                     <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.userAnswer}</td>
                     <td style={{ padding: "8px 8px", textAlign: "right" }}>{e.correctAnswer}</td>
                     <td style={{
@@ -915,7 +1098,7 @@ function ResultsScreen({ app, setApp, go }) {
                 ))}
                 {(res.log || []).length === 0 && (
                   <tr>
-                    <td colSpan={7} style={{ padding: "16px 8px", textAlign: "center", color: "var(--ed-ink-soft)", fontStyle: "italic" }}>
+                    <td colSpan={6} style={{ padding: "16px 8px", textAlign: "center", color: "var(--ed-ink-soft)", fontStyle: "italic" }}>
                       No se registraron ejercicios en esta sesión.
                     </td>
                   </tr>

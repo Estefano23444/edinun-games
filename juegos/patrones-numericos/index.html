@@ -774,16 +774,24 @@ function PortalToBody({ children }) {
 // ─────────────────────────────────────────────────────────────
 // Generador de problemas — 1 categoría ("patrones"), 3 rondas.
 //   idx 0 → suma o resta (paso aditivo ±2..±11)
-//   idx 1 → multiplicación = tabla del N · factor 2..10
-//   idx 2 → división = tabla del N inversa · factor 2..10
-// Restricción: solo números naturales (≥ 1) en TODOS los términos.
+//   idx 1 → multiplicación geométrica real · factor 2..5
+//   idx 2 → división geométrica real · factor 2..5
 //
-// `easy` modula el rango. Si easy=true → rangos pequeños (paso 2..5,
-// factor 2..4); si easy=false → rangos grandes (paso 6..11, factor 5..10).
-// El llamador (GameScreen) decide aleatoriamente al inicio de la sesión
-// cuál de las 3 rondas será la fácil — las otras dos serán difíciles.
+// Restricciones:
+// - Solo números naturales (≥ 1) en TODOS los términos.
+// - Tope 999 (3 cifras máximo). 5⁴ = 625 es el factor máximo viable.
+// - Para variedad, el `start` de cada secuencia se sortea entre todos
+//   los enteros que mantienen el último término ≤ 999 (mult) o
+//   primer término ≤ 999 (div). Ej: ×2 puede arrancar en 7 → 7,14,28,56,112.
+// - `excludeFactor` permite que la división no use el mismo factor que
+//   la multiplicación de la misma sesión (evita "todo del 8" repetido).
+//
+// `easy` modula el rango. Easy → factor pool {2,3}; Hard → {4,5}.
+// Suma/resta easy → paso 2..5; hard → 6..11.
+// El llamador (GameScreen) sortea al inicio de la sesión cuál de las
+// 3 rondas será la fácil — las otras dos serán difíciles.
 // ─────────────────────────────────────────────────────────────
-function makeProblem(cat, idx = 0, easy = false) {
+function makeProblem(cat, idx = 0, easy = false, excludeFactor = null) {
   const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
 
   function pickBlanks(len, count) {
@@ -819,18 +827,39 @@ function makeProblem(cat, idx = 0, easy = false) {
     }
   }
 
+  // Pool de factores según dificultad. Tope 5 para mantener ≤ 999 (5⁴=625).
+  const easyPool = [2, 3];
+  const hardPool = [4, 5];
+  function pickFactor() {
+    let pool = easy ? easyPool.slice() : hardPool.slice();
+    if (excludeFactor !== null) {
+      const filtered = pool.filter((f) => f !== excludeFactor);
+      if (filtered.length > 0) pool = filtered;
+    }
+    return pool[rand(0, pool.length - 1)];
+  }
+
   if (idx === 1) {
-    // Multiplicación = tabla del N · 5 múltiplos consecutivos: N, 2N, 3N, 4N, 5N.
-    // Easy → factor 2..4; Hard → factor 5..10.
-    // Pedagógicamente alineado con "tablas" del 2do ciclo escolar.
-    const factor = easy ? rand(2, 4) : rand(5, 10);
-    const terms = Array.from({ length: len }, (_, i) => factor * (i + 1));
+    // Multiplicación geométrica real: cada término = anterior × factor.
+    // Secuencia: start, start·F, start·F², start·F³, start·F⁴.
+    // start variable (1..⌊999/F⁴⌋) para variedad: ×2 admite hasta start=62.
+    const factor = pickFactor();
+    const maxStart = Math.max(1, Math.floor(999 / Math.pow(factor, len - 1)));
+    const start = rand(1, maxStart);
+    const terms = Array.from({ length: len }, (_, i) => start * Math.pow(factor, i));
     return { type: "patrones", idx, op: "×", step: factor, terms, blanks: pickBlanks(len, blankCount) };
   }
 
-  // idx === 2 — División = tabla del N inversa: 5N, 4N, 3N, 2N, N.
-  const divisor = easy ? rand(2, 4) : rand(5, 10);
-  const terms = Array.from({ length: len }, (_, i) => divisor * (len - i));
+  // idx === 2 — División geométrica real: cada término = anterior ÷ divisor.
+  // Para que TODOS los términos sean enteros y el último ≥ 1, el primer
+  // término debe ser múltiplo de divisor⁴. Sorteamos un múltiplo aleatorio
+  // dentro del rango que cabe en 999.
+  const divisor = pickFactor();
+  const baseDiv = Math.pow(divisor, len - 1);
+  const maxMultiplier = Math.max(1, Math.floor(999 / baseDiv));
+  const multiplier = rand(1, maxMultiplier);
+  const start = baseDiv * multiplier;
+  const terms = Array.from({ length: len }, (_, i) => start / Math.pow(divisor, i));
   return { type: "patrones", idx, op: "÷", step: divisor, terms, blanks: pickBlanks(len, blankCount) };
 }
 
@@ -887,6 +916,9 @@ function GameScreen({ app, setApp, go }) {
   // Sorteo al inicio de la sesión: cuál ronda (0, 1 o 2) es la "fácil".
   // Las otras dos serán "difíciles". Con cada partida cambia.
   const easyRound = useRefG(Math.floor(Math.random() * 3));
+  // Factor de la multiplicación (idx 1) — para que la división (idx 2) lo
+  // excluya y nunca compartan factor en la misma sesión.
+  const multFactor = useRefG(null);
 
   const [problem, setProblem] = useStateG(() => makeProblem(cat, 0, 0 === easyRound.current));
 
@@ -1041,10 +1073,13 @@ function GameScreen({ app, setApp, go }) {
         window.incrementGamesCompleted && window.incrementGamesCompleted();
         go("results");
       } else {
+        // Capturar el factor de la multiplicación (problema actual idx=1)
+        // para que la siguiente división (idx=2) lo excluya.
+        if (problem.idx === 1) multFactor.current = problem.step;
+
         // newAttempted = índice del PRÓXIMO ejercicio (1 o 2).
-        // Esto controla si la siguiente ronda es +/−, ×, o ÷.
-        // Y si es la ronda fácil sorteada al inicio, se generan rangos pequeños.
-        setProblem(makeProblem(cat, newAttempted, newAttempted === easyRound.current));
+        const exclude = newAttempted === 2 ? multFactor.current : null;
+        setProblem(makeProblem(cat, newAttempted, newAttempted === easyRound.current, exclude));
         exerciseStart.current = Date.now();
       }
     }, wait);
@@ -1064,11 +1099,28 @@ function GameScreen({ app, setApp, go }) {
       ? "MULTIPLICACIÓN"
       : "DIVISIÓN";
 
-  // Tile width según largo del término (para que las casillas de la secuencia
-  // mantengan proporciones legibles).
+  // Tile width / fontSize según largo del término. Para factores grandes
+  // (×10 con term=10000) los números deben encogerse para que la fila quepa
+  // en el wrapper de 580 sin overflow.
   function termTileWidth(t) {
     const len = String(t).length;
-    return Math.max(50, len * 28 + 20);
+    if (len <= 2) return Math.max(48, len * 26 + 18);
+    if (len === 3) return 78;
+    if (len === 4) return 96;
+    return 116; // 5+ dígitos
+  }
+  function termFontSize(t) {
+    const len = String(t).length;
+    if (len <= 2) return 40;
+    if (len === 3) return 34;
+    if (len === 4) return 28;
+    return 24;
+  }
+  // Slot size adaptativo según largo del valor del hueco.
+  function slotSize(slotsLen) {
+    if (slotsLen <= 2) return 44;
+    if (slotsLen === 3) return 38;
+    return 32; // 4-5 dígitos
   }
 
   return (
@@ -1202,7 +1254,7 @@ function GameScreen({ app, setApp, go }) {
 
         {/* Secuencia — términos separados por comas para diferenciarlos. */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           flexWrap: "nowrap",
         }}>
           {problem.terms.map((t, i) => {
@@ -1212,9 +1264,9 @@ function GameScreen({ app, setApp, go }) {
             const cell = blankIdx === -1 ? (
               <div style={{
                 minWidth: termTileWidth(t),
-                padding: "10px 12px",
+                padding: "10px 6px",
                 fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                fontSize: 40, lineHeight: 1, color: "#fce9a8",
+                fontSize: termFontSize(t), lineHeight: 1, color: "#fce9a8",
                 textShadow: "0 0 12px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
                 textAlign: "center",
               }}>
@@ -1223,10 +1275,11 @@ function GameScreen({ app, setApp, go }) {
             ) : (() => {
               const slots = blankInputs[blankIdx] || [];
               const slotsLen = slots.length || String(problem.terms[i]).length;
+              const ss = slotSize(slotsLen);
               return (
                 <div style={{ display: "flex", gap: 4 }}>
                   {Array.from({ length: slotsLen }).map((_, j) => (
-                    <SlotBox key={j} value={slots[j] || ""} feedback={feedback} size={44} />
+                    <SlotBox key={j} value={slots[j] || ""} feedback={feedback} size={ss} />
                   ))}
                 </div>
               );
@@ -1238,9 +1291,9 @@ function GameScreen({ app, setApp, go }) {
                 {!isLast && (
                   <span style={{
                     fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                    fontSize: 40, lineHeight: 1, color: "#fce9a8",
+                    fontSize: 32, lineHeight: 1, color: "#fce9a8",
                     transform: "translateY(8px)",
-                    padding: "0 2px",
+                    padding: "0 1px",
                   }}>,</span>
                 )}
               </React.Fragment>
