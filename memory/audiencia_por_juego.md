@@ -1,6 +1,6 @@
 ---
 name: Audiencia por juego (excepciones al default 6-8)
-description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10, operaciones-combinadas 10).
+description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10, operaciones-combinadas 10, sustituciones 10).
 type: project
 ---
 
@@ -23,6 +23,20 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - Suma/resta con pasos ±1..±15.
 - **Solo números naturales** (≥ 1) — ningún término puede ser 0 o negativo, ni la división puede producir fracción.
 - **Why:** el usuario lo pidió explícitamente. A 9 años ya saben las tablas de multiplicar.
+
+### `juegos/sustituciones/` — 10 años (2026-05-07)
+
+- Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
+- 3 rondas con **mecánicas distintas** que enseñan sustitución, paréntesis y los combinan al final:
+  - Ronda 1 — `Sustituciones`: tabla de variables `A=1,2 · B=0,4 · C=5,3 · D=1,5` + expresión con letras `A + B × D`. Multiple choice con 3 opciones.
+  - Ronda 2 — `Paréntesis`: expresión con paréntesis explícitos `24,35 + (3 × 2,4) − (10 ÷ 4)`. Multiple choice con 3 opciones.
+  - Ronda 3 — `Combinado`: tabla de variables + expresión con letras y paréntesis `(A + B) × C − D`. Numpad guiado paso a paso (3 pasos).
+- Origen: ejercicios del libro de mate (capturas que envió el usuario).
+- Distractores en R1: sin jerarquía, omitir un término. En R2: signo cambiado, olvidar dividir.
+- Aritmética interna en décimas (×10) para evitar imprecisión de float — heredado de `operaciones-combinadas`.
+- Variables solo A, B, C, D (4 letras máx, sin X/Y para no sugerir álgebra futura).
+- Personaje destacado en landing: **Cifra** (`charId: "numero"`).
+- **Why:** el usuario lo pidió explícitamente. A 10 años se introducen variables (concepto pre-algebraico) y paréntesis explícitos en el currículo.
 
 ### `juegos/operaciones-combinadas/` — 10 años (2026-05-06)
 
