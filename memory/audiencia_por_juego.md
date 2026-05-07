@@ -1,6 +1,6 @@
 ---
 name: Audiencia por juego (excepciones al default 6-8)
-description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10, operaciones-combinadas 10, sustituciones 10).
+description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10, operaciones-combinadas 10, sustituciones 10, metro-cubico 10, conversion-masa 10).
 type: project
 ---
 
@@ -63,6 +63,34 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - Numpad solo aparece en ronda 3; rondas 1 y 2 son tap directo.
 - Personaje destacado en landing: **Cifra** (`charId: "numero"`).
 - **Why:** el usuario lo pidió explícitamente. A 10 años se enseña formalmente la descomposición en factores primos en el currículo.
+
+### `juegos/conversion-masa/` — 10 años (2026-05-07)
+
+- Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
+- Tema: **conversiones entre unidades de masa** (kg ↔ g, kg ↔ lb, kg ↔ t, g ↔ lb, lb ↔ kg). Basado en el Tema 3 del libro de mate del usuario.
+- Diferencia con `medidas-de-masa` (9 años, 1 mecánica numpad): este juego usa **3 mecánicas DISTINTAS** explícitamente pedidas por el usuario:
+  - Ronda 1 — `¿Cuál pesa más?`: 3 productos en unidades distintas, tap el más pesado.
+  - Ronda 2 — `¿Cuál NO equivale?`: 1 origen + 4 opciones (3 correctas + 1 falsa por mover ceros), tap la falsa.
+  - Ronda 3 — `Conversión paso a paso`: numpad guiado, 2 saltos atravesando una unidad intermedia (`t→kg→g`, `lb→kg→g`, etc.).
+- Factor lb redondeado a **454** (no 453,59) para mantener respuestas enteras. Factor kg↔lb sigue siendo **2,2** con pool entero.
+- Tonelada **métrica** (1 t = 1 000 kg), no tonelada corta (907,18) que usa el libro — el currículo regional usa la métrica.
+- Personaje destacado en landing: **Nova** (`charId: "fisica"`), mismo charId que `medidas-de-masa`.
+- **Why:** el usuario pidió explícitamente que el juego cubra las conversiones específicas del libro (kg↔t, g↔lb, lb↔kg) Y que use mecánicas distintas a `medidas-de-masa`. La primera propuesta (Estimación + V/F + numpad) fue rechazada por parecerse a otros juegos; la segunda (cuál pesa más + cuál no equivale + paso a paso) fue aprobada.
+
+### `juegos/metro-cubico/` — 10 años (2026-05-07)
+
+- Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
+- Mismo formato que `medidas-de-masa` pero **factor ×1000** entre adyacentes (no ×10).
+- 3 rondas escalonadas **por operación**:
+  - Ronda 1 — SOLO multiplicación (×): par mayor→menor en `km³ · hm³ · dam³ · m³ · dm³ · cm³ · mm³`. Saltos 1-3 (×1.000, ×1.000.000, ×1.000.000.000).
+  - Ronda 2 — SOLO división (÷): mismo sorteo, dirección invertida.
+  - Ronda 3 — equivalencias 1:1 con litros: `1 dm³ = 1 L · 1 mL = 1 cm³` (las 2 únicas que un chico de 10 años conoce, según el usuario).
+- **Tope 10 cifras** (≤ 9.999.999.999). Habilita `km³ ↔ m³` (factor 10⁹).
+- Cap `fromValue`: 1-99 para saltos 1-2, 1-9 para saltos 3 (mantener tope).
+- **Solo respuestas enteras** (en R2 `fromValue = answer × factor`).
+- R3 conversión 1:1 con valor 1-999 (la habilidad es reconocer la equivalencia, no calcular).
+- Personaje destacado en landing: **Nova** (`charId: "fisica"`) — magnitudes físicas, mismo charId que `medidas-de-masa`.
+- **Why:** el usuario lo pidió explícitamente. A 10 años se enseña formalmente el sistema métrico decimal de volumen con factor ×1000 y las 2 equivalencias básicas con litros.
 
 ### `juegos/medidas-de-masa/` — 9 años (2026-05-06)
 
