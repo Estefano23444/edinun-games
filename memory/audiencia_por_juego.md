@@ -1,12 +1,24 @@
 ---
 name: Audiencia por juego (excepciones al default 6-8)
-description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10, operaciones-combinadas 10, sustituciones 10, metro-cubico 10, conversion-masa 10).
+description: La audiencia por defecto del repo edinun-games es 6-8 años. Se documentan acá las excepciones por juego (coordenadas-rectangulares 9, fracciones 9-12, patrones-numericos 9, medidas-de-masa 9, numeros-primos 10, operaciones-combinadas 10, sustituciones 10, metro-cubico 10, conversion-masa 10).
 type: project
 ---
 
 La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USER.md` de cada juego) es **6-8 años**.
 
 ## Excepciones documentadas
+
+### `juegos/JUEGO-5-coordenadas-rectangulares/` — 9 años (2026-05-08)
+
+- Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
+- 3 rondas con **mecánicas distintas** mapeadas 1:1 al Tema 1 del libro de mate:
+  - Ronda 1 — `¿En qué casilla está [emoji]?`: grid 5×5 con encabezados `(letra, número)`. 6 emojis distintos en posiciones únicas. Tap entre 4 coordenadas.
+  - Ronda 2 — `¿Qué par ordenado es este punto?`: plano cartesiano 0..5 × 0..5 con punto marcado. Tap entre 4 pares `(x, y)` cercanos.
+  - Ronda 3 — `Camino del perro Kody`: plano 0..6 × 0..5 con 🐶 en (0,0) y 💎 en (X, Y). Numpad guiado en 2 pasos: pasos derecha → pasos arriba. Si falla un paso, el ejercicio termina.
+- Origen: ejercicios del libro de mate (Tema 1, capturas que envió el usuario).
+- Combina los **dos formatos** del libro: `(letra, número)` tipo mapa + `(x, y)` numérico — escalón pedagógico apropiado para 9 años.
+- Personaje destacado: **Pita** (`charId: "geo"`), mismo charId que `plano-cartesiano` y `fracciones`.
+- **Why:** el usuario lo pidió explícitamente. A 9 años se introduce formalmente el sistema de coordenadas en el currículo. El formato `(letra, número)` (tipo Sofía/Iván buscando tesoro) es específico del libro y no existía en otros juegos del repo.
 
 ### `juegos/JUEGO-6-fracciones/` — 9-12 años (2026-05-05)
 
