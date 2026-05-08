@@ -8,14 +8,14 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 
 ## Excepciones documentadas
 
-### `juegos/fracciones/` — 9-12 años (2026-05-05)
+### `juegos/JUEGO-6-fracciones/` — 9-12 años (2026-05-05)
 
 - Denominadores hasta 10-12 (vs 2-8 del rango básico).
 - Slots numéricos de 2 dígitos (centésimas).
 - Copy menos infantilizado (terminología técnica: "amplificación", "simplificación", "centésimas").
 - **Why:** el usuario lo pidió explícitamente. Los 3 niveles (Fracciones / Equivalentes / Decimales) son contenido del segundo ciclo escolar.
 
-### `juegos/patrones-numericos/` — 9 años (2026-05-05)
+### `juegos/JUEGO-7-patrones-numericos/` — 9 años (2026-05-05)
 
 - Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
 - 3 ejercicios escalonados por operación: suma/resta → multiplicación → división.
@@ -24,7 +24,7 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - **Solo números naturales** (≥ 1) — ningún término puede ser 0 o negativo, ni la división puede producir fracción.
 - **Why:** el usuario lo pidió explícitamente. A 9 años ya saben las tablas de multiplicar.
 
-### `juegos/sustituciones/` — 10 años (2026-05-07)
+### `juegos/JUEGO-10-sustituciones/` — 10 años (2026-05-07)
 
 - Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
 - 3 rondas con **mecánicas distintas** que enseñan sustitución, paréntesis y los combinan al final:
@@ -52,7 +52,7 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - Personaje destacado en landing: **Cifra** (`charId: "numero"`).
 - **Why:** el usuario lo pidió explícitamente. A 10 años se enseña formalmente la jerarquía de operaciones con decimales en el currículo.
 
-### `juegos/numeros-primos/` — 10 años (2026-05-06)
+### `juegos/JUEGO-9-numeros-primos/` — 10 años (2026-05-06)
 
 - Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
 - 3 rondas con **mecánicas distintas** (no escalado dentro de una sola mecánica):
@@ -64,7 +64,7 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - Personaje destacado en landing: **Cifra** (`charId: "numero"`).
 - **Why:** el usuario lo pidió explícitamente. A 10 años se enseña formalmente la descomposición en factores primos en el currículo.
 
-### `juegos/conversion-masa/` — 10 años (2026-05-07)
+### `juegos/JUEGO-12-conversion-masa/` — 10 años (2026-05-07)
 
 - Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
 - Tema: **conversiones entre unidades de masa** (kg ↔ g, kg ↔ lb, kg ↔ t, g ↔ lb, lb ↔ kg). Basado en el Tema 3 del libro de mate del usuario.
@@ -77,7 +77,7 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - Personaje destacado en landing: **Nova** (`charId: "fisica"`), mismo charId que `medidas-de-masa`.
 - **Why:** el usuario pidió explícitamente que el juego cubra las conversiones específicas del libro (kg↔t, g↔lb, lb↔kg) Y que use mecánicas distintas a `medidas-de-masa`. La primera propuesta (Estimación + V/F + numpad) fue rechazada por parecerse a otros juegos; la segunda (cuál pesa más + cuál no equivale + paso a paso) fue aprobada.
 
-### `juegos/metro-cubico/` — 10 años (2026-05-07)
+### `juegos/JUEGO-11-metro-cubico/` — 10 años (2026-05-07)
 
 - Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
 - Mismo formato que `medidas-de-masa` pero **factor ×1000** entre adyacentes (no ×10).
@@ -92,7 +92,7 @@ La audiencia por defecto del repo `edinun-games` (definida en `CLAUDE.md` y `USE
 - Personaje destacado en landing: **Nova** (`charId: "fisica"`) — magnitudes físicas, mismo charId que `medidas-de-masa`.
 - **Why:** el usuario lo pidió explícitamente. A 10 años se enseña formalmente el sistema métrico decimal de volumen con factor ×1000 y las 2 equivalencias básicas con litros.
 
-### `juegos/medidas-de-masa/` — 9 años (2026-05-06)
+### `juegos/JUEGO-8-medidas-de-masa/` — 9 años (2026-05-06)
 
 - Único nivel (sin chips de dificultad en Home, sin tabs en HUD del juego).
 - 3 rondas escalonadas **por operación** (no por distancia):
