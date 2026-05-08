@@ -870,80 +870,93 @@ function makeProblem(cat, idx = 0) {
   }
 
   if (idx === 1) {
-    // R2 — ¿Cuál NO equivale? Pool curado con valores SENCILLOS para
-    // 10 años: solo equivalencias ENTERAS (sin decimales raros, sin
-    // mg con millones de ceros). 2 correctas + 1 falsa = 3 opciones.
+    // R2 — ¿Cuál NO equivale? Pool curado donde TODA fuente tiene
+    // EXACTAMENTE 3 equivalencias simples (sin decimales raros, sin mg).
+    // 3 correctas + 1 falsa = 4 opciones en grid 2x2.
     const sources = [
-      { unit: "kg", value: 5, equivalences: [
-        { unit: "g", value: 5000 },
-        { unit: "lb", value: 11 },
-      ]},
-      { unit: "kg", value: 10, equivalences: [
-        { unit: "g", value: 10000 },
-        { unit: "lb", value: 22 },
-      ]},
-      { unit: "kg", value: 25, equivalences: [
-        { unit: "g", value: 25000 },
-        { unit: "lb", value: 55 },
-      ]},
-      { unit: "kg", value: 50, equivalences: [
-        { unit: "g", value: 50000 },
-        { unit: "lb", value: 110 },
-      ]},
       { unit: "kg", value: 100, equivalences: [
+        { unit: "t", value: 0.1 },
         { unit: "g", value: 100000 },
         { unit: "lb", value: 220 },
+      ]},
+      { unit: "kg", value: 500, equivalences: [
+        { unit: "t", value: 0.5 },
+        { unit: "g", value: 500000 },
+        { unit: "lb", value: 1100 },
       ]},
       { unit: "kg", value: 1000, equivalences: [
         { unit: "t", value: 1 },
         { unit: "g", value: 1000000 },
         { unit: "lb", value: 2200 },
       ]},
+      { unit: "kg", value: 2000, equivalences: [
+        { unit: "t", value: 2 },
+        { unit: "g", value: 2000000 },
+        { unit: "lb", value: 4400 },
+      ]},
+      { unit: "t", value: 0.1, equivalences: [
+        { unit: "kg", value: 100 },
+        { unit: "g", value: 100000 },
+        { unit: "lb", value: 220 },
+      ]},
+      { unit: "t", value: 0.5, equivalences: [
+        { unit: "kg", value: 500 },
+        { unit: "g", value: 500000 },
+        { unit: "lb", value: 1100 },
+      ]},
       { unit: "t", value: 1, equivalences: [
         { unit: "kg", value: 1000 },
+        { unit: "g", value: 1000000 },
         { unit: "lb", value: 2200 },
       ]},
       { unit: "t", value: 2, equivalences: [
         { unit: "kg", value: 2000 },
+        { unit: "g", value: 2000000 },
         { unit: "lb", value: 4400 },
       ]},
       { unit: "t", value: 5, equivalences: [
         { unit: "kg", value: 5000 },
+        { unit: "g", value: 5000000 },
         { unit: "lb", value: 11000 },
       ]},
-      { unit: "lb", value: 11, equivalences: [
-        { unit: "kg", value: 5 },
-        { unit: "g", value: 5000 },
+      { unit: "g", value: 100000, equivalences: [
+        { unit: "kg", value: 100 },
+        { unit: "t", value: 0.1 },
+        { unit: "lb", value: 220 },
       ]},
-      { unit: "lb", value: 22, equivalences: [
-        { unit: "kg", value: 10 },
-        { unit: "g", value: 10000 },
+      { unit: "g", value: 500000, equivalences: [
+        { unit: "kg", value: 500 },
+        { unit: "t", value: 0.5 },
+        { unit: "lb", value: 1100 },
       ]},
-      { unit: "lb", value: 55, equivalences: [
-        { unit: "kg", value: 25 },
-        { unit: "g", value: 25000 },
+      { unit: "g", value: 1000000, equivalences: [
+        { unit: "kg", value: 1000 },
+        { unit: "t", value: 1 },
+        { unit: "lb", value: 2200 },
       ]},
-      { unit: "g", value: 5000, equivalences: [
-        { unit: "kg", value: 5 },
-        { unit: "lb", value: 11 },
+      { unit: "lb", value: 220, equivalences: [
+        { unit: "kg", value: 100 },
+        { unit: "t", value: 0.1 },
+        { unit: "g", value: 100000 },
       ]},
-      { unit: "g", value: 10000, equivalences: [
-        { unit: "kg", value: 10 },
-        { unit: "lb", value: 22 },
+      { unit: "lb", value: 1100, equivalences: [
+        { unit: "kg", value: 500 },
+        { unit: "t", value: 0.5 },
+        { unit: "g", value: 500000 },
       ]},
-      { unit: "g", value: 25000, equivalences: [
-        { unit: "kg", value: 25 },
-        { unit: "lb", value: 55 },
+      { unit: "lb", value: 2200, equivalences: [
+        { unit: "kg", value: 1000 },
+        { unit: "t", value: 1 },
+        { unit: "g", value: 1000000 },
       ]},
     ];
 
     const src = sources[rand(0, sources.length - 1)];
 
-    // Tomar 2 correctas (sortear el orden si hay 3, tomar las 2 primeras).
-    const shuffled = pickN(src.equivalences, src.equivalences.length);
-    const corrects = shuffled.slice(0, 2);
+    // Las 3 correctas son TODAS las equivalencias del source.
+    const corrects = src.equivalences.slice();
 
-    // Falsa: tomar una de las equivalencias correctas y moverle los ceros.
+    // Falsa: tomar una de las correctas y moverle los ceros (×10, ×100, ÷10).
     // Validar que el resultado NO coincida con ninguna correcta.
     const baseFalse = corrects[rand(0, corrects.length - 1)];
     const corruptOps = [10, 100, 0.1];
@@ -1319,9 +1332,9 @@ function GameScreen({ app, setApp, go }) {
     exerciseStart.current = Date.now();
   }
 
-  const bocadilloText = problem.idx === 0
-    ? "Selecciona la respuesta correcta."
-    : "Ingresa los números correctos.";
+  const bocadilloText = problem.idx === 2
+    ? "Ingresa los números correctos."
+    : "Selecciona la respuesta correcta.";
   const instructionText =
     problem.idx === 0 ? "¿Cuál pesa más?" :
     problem.idx === 1 ? "¿Cuál NO equivale?" :
@@ -1689,7 +1702,7 @@ function GameScreen({ app, setApp, go }) {
               <span style={{ fontSize: 26, opacity: 0.85 }}>{problem.source.unit}</span>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, width: 540 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, width: 480 }}>
               {problem.options.map((op, i) => (
                 <button
                   key={i}
@@ -1698,7 +1711,7 @@ function GameScreen({ app, setApp, go }) {
                   className={feedback === null ? "ed-pulse-glow" : ""}
                   style={{
                     display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6,
-                    padding: "18px 0",
+                    padding: "16px 0",
                     borderRadius: 16,
                     border: "3px solid rgba(79,216,255,0.6)",
                     background: "linear-gradient(180deg, rgba(20,12,55,0.7), rgba(10,6,35,0.88))",
