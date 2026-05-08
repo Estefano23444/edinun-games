@@ -773,9 +773,9 @@ function makeProblem(cat, idx = 0) {
   }
 
   if (idx === 1) {
-    // Plano numérico 0..5 × 0..5. Un punto marcado.
-    const x = rand(0, 5);
-    const y = rand(0, 5);
+    // Plano numérico 0..6 × 0..6. Un punto marcado.
+    const x = rand(0, 6);
+    const y = rand(0, 6);
     const correct = `(${x}, ${y})`;
     // Distractores: cercanos al correcto (no el mismo).
     const distractors = new Set();
@@ -784,15 +784,15 @@ function makeProblem(cat, idx = 0) {
       guard++;
       let dx = x + rand(-2, 2);
       let dy = y + rand(-2, 2);
-      dx = Math.max(0, Math.min(5, dx));
-      dy = Math.max(0, Math.min(5, dy));
+      dx = Math.max(0, Math.min(6, dx));
+      dy = Math.max(0, Math.min(6, dy));
       const opt = `(${dx}, ${dy})`;
       if (opt !== correct) distractors.add(opt);
     }
     // Si no se completaron 3 (caso extremo), rellenar con randoms.
     while (distractors.size < 3) {
-      const dx = rand(0, 5);
-      const dy = rand(0, 5);
+      const dx = rand(0, 6);
+      const dy = rand(0, 6);
       const opt = `(${dx}, ${dy})`;
       if (opt !== correct) distractors.add(opt);
     }
@@ -803,8 +803,8 @@ function makeProblem(cat, idx = 0) {
     };
   }
 
-  // R3 — camino del perro Kody. Personaje en (0,0), tesoro en (X, Y).
-  const X = rand(2, 6);
+  // R3 — camino del cohete a la luna. Cohete en (0,0), luna en (X, Y).
+  const X = rand(2, 5);
   const Y = rand(2, 5);
   return {
     type: "coords", idx,
@@ -903,8 +903,8 @@ function GridR1({ positions, target }) {
 // Si character=true, dibuja además al perro en (0,0) y tesoro en target.
 // ─────────────────────────────────────────────────────────────
 function CartesianPlane({ x, y, max = 5, point = true, character = false, walkedX = 0, walkedY = 0 }) {
-  const step = 36;
-  const padL = 30, padB = 26, padT = 12, padR = 12;
+  const step = 32;
+  const padL = 36, padB = 36, padT = 36, padR = 44;
   const w = padL + step * max + padR;
   const h = padT + step * max + padB;
   // Conversión: ejes con (0,0) abajo-izquierda.
@@ -921,7 +921,7 @@ function CartesianPlane({ x, y, max = 5, point = true, character = false, walked
         <g key={`v-${i}`}>
           <line x1={toX(i)} y1={toY(0)} x2={toX(i)} y2={toY(max)}
             stroke="rgba(252,233,168,0.18)" strokeWidth="1" />
-          <text x={toX(i)} y={toY(0) + 16} fontSize="11" fill="#fce9a8" textAnchor="middle"
+          <text x={toX(i)} y={toY(0) + 18} fontSize="12" fill="#fce9a8" textAnchor="middle"
             fontFamily="var(--ed-font-display)" fontWeight="700">{i}</text>
         </g>
       ))}
@@ -929,7 +929,7 @@ function CartesianPlane({ x, y, max = 5, point = true, character = false, walked
         <g key={`h-${i}`}>
           <line x1={toX(0)} y1={toY(i)} x2={toX(max)} y2={toY(i)}
             stroke="rgba(252,233,168,0.18)" strokeWidth="1" />
-          <text x={toX(0) - 8} y={toY(i) + 4} fontSize="11" fill="#fce9a8" textAnchor="end"
+          <text x={toX(0) - 10} y={toY(i) + 4} fontSize="12" fill="#fce9a8" textAnchor="end"
             fontFamily="var(--ed-font-display)" fontWeight="700">{i}</text>
         </g>
       ))}
@@ -943,10 +943,12 @@ function CartesianPlane({ x, y, max = 5, point = true, character = false, walked
           <path d="M0,0 L7,4 L0,8 z" fill="#fce9a8" />
         </marker>
       </defs>
-      <text x={toX(max) + 4} y={toY(0) + 4} fontSize="11" fill="#fce9a8"
-        fontFamily="var(--ed-font-display)" fontWeight="700">x</text>
-      <text x={toX(0) - 4} y={toY(max) - 2} fontSize="11" fill="#fce9a8" textAnchor="end"
-        fontFamily="var(--ed-font-display)" fontWeight="700">y</text>
+      {/* Etiqueta x — más allá de la flecha del eje x, separada del último número */}
+      <text x={toX(max) + 18} y={toY(0) + 5} fontSize="14" fill="#fce9a8" textAnchor="middle"
+        fontFamily="var(--ed-font-display)" fontWeight="700" fontStyle="italic">x</text>
+      {/* Etiqueta y — encima de la flecha del eje y, no al lado */}
+      <text x={toX(0)} y={toY(max) - 14} fontSize="14" fill="#fce9a8" textAnchor="middle"
+        fontFamily="var(--ed-font-display)" fontWeight="700" fontStyle="italic">y</text>
 
       {/* Camino caminado (R3) */}
       {character && walkedX > 0 && (
@@ -958,13 +960,18 @@ function CartesianPlane({ x, y, max = 5, point = true, character = false, walked
           stroke="#4fd8ff" strokeWidth="3" strokeDasharray="4 3" />
       )}
 
-      {/* Personaje en origen (R3) */}
+      {/* Luna en target (R3) — centrada sobre (x, y) */}
       {character && (
-        <text x={toX(0)} y={toY(0) - 14} fontSize="22" textAnchor="middle">🐶</text>
+        <text x={toX(x)} y={toY(y)} fontSize="22" textAnchor="middle" dominantBaseline="central">🌙</text>
       )}
-      {/* Tesoro en target (R3) */}
+      {/* Cohete — empieza en (0,0) y se mueve a (walkedX, walkedY) según responde */}
       {character && (
-        <text x={toX(x)} y={toY(y) + 6} fontSize="20" textAnchor="middle">💎</text>
+        <g style={{
+          transform: `translate(${(toX(walkedX) - toX(0))}px, ${(toY(walkedY) - toY(0))}px)`,
+          transition: "transform 0.55s ease",
+        }}>
+          <text x={toX(0)} y={toY(0)} fontSize="22" textAnchor="middle" dominantBaseline="central">🚀</text>
+        </g>
       )}
 
       {/* Punto marcado (R2) */}
@@ -1006,6 +1013,7 @@ function GameScreen({ app, setApp, go }) {
   const [step, setStep] = useStateG(0); // 0 = derecha, 1 = arriba
   const [slot, setSlot] = useStateG("");
   const [walkedX, setWalkedX] = useStateG(0);
+  const [walkedY, setWalkedY] = useStateG(0);
 
   const [elapsed, setElapsed] = useStateG(0);
   const [stars, setStars] = useStateG(0);
@@ -1023,15 +1031,10 @@ function GameScreen({ app, setApp, go }) {
 
   // Reset de R3 al cambiar de problema
   useEffectG(() => {
-    if (problem.idx === 2) {
-      setStep(0);
-      setSlot("");
-      setWalkedX(0);
-    } else {
-      setStep(0);
-      setSlot("");
-      setWalkedX(0);
-    }
+    setStep(0);
+    setSlot("");
+    setWalkedX(0);
+    setWalkedY(0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problem]);
 
@@ -1114,7 +1117,13 @@ function GameScreen({ app, setApp, go }) {
       correctAnswer: `${problem.targetX} der., ${problem.targetY} arriba`,
       userAnswer: `${problem.targetX} der., ${slot} arriba`,
     };
-    finalize(isCorrect, entry);
+    if (isCorrect) {
+      // Mover el cohete a (X, Y) y esperar la animación antes de finalizar.
+      setWalkedY(problem.targetY);
+      setTimeout(() => finalize(true, entry), 700);
+      return;
+    }
+    finalize(false, entry);
   }
 
   function finalize(isCorrect, partialEntry) {
@@ -1192,7 +1201,7 @@ function GameScreen({ app, setApp, go }) {
     setAttempted(0); setSolved(0);
     setStars(0); setStarsSession(0);
     setFeedback(null); setFeedbackMsg("");
-    setLog([]); setSlot(""); setStep(0); setWalkedX(0);
+    setLog([]); setSlot(""); setStep(0); setWalkedX(0); setWalkedY(0);
     setProblem(makeProblem(cat, 0));
     started.current = Date.now();
     exerciseStart.current = Date.now();
@@ -1311,8 +1320,8 @@ function GameScreen({ app, setApp, go }) {
 
       {/* ZONA CENTRAL */}
       <div data-qa="zona-central" style={{
-        position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
-        width: 580, height: problem.idx === 2 ? 320 : 360,
+        position: "absolute", left: "50%", top: 96, transform: "translateX(-50%)",
+        width: 580, height: problem.idx === 2 ? 350 : 360,
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "space-evenly",
         textAlign: "center",
@@ -1331,8 +1340,8 @@ function GameScreen({ app, setApp, go }) {
           <>
             <GridR1 positions={problem.positions} target={problem.target} />
             <div style={{
-              display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 10, width: 380,
+              display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 8, width: 360,
             }}>
               {problem.options.map((opt, i) => (
                 <button
@@ -1341,9 +1350,9 @@ function GameScreen({ app, setApp, go }) {
                   disabled={feedback !== null}
                   style={{
                     fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                    fontSize: 24, lineHeight: 1,
-                    padding: "12px 0",
-                    borderRadius: 12,
+                    fontSize: 18, lineHeight: 1,
+                    padding: "10px 0",
+                    borderRadius: 10,
                     border: "2px solid rgba(252,233,168,0.5)",
                     background: "rgba(10,6,35,0.55)",
                     color: "#fce9a8",
@@ -1374,10 +1383,10 @@ function GameScreen({ app, setApp, go }) {
         {/* R2 — Plano cartesiano + 4 botones */}
         {problem.idx === 1 && (
           <>
-            <CartesianPlane x={problem.x} y={problem.y} max={5} point={true} />
+            <CartesianPlane x={problem.x} y={problem.y} max={6} point={true} />
             <div style={{
-              display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 10, width: 360,
+              display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+              gap: 8, width: 340,
             }}>
               {problem.options.map((opt, i) => (
                 <button
@@ -1386,9 +1395,9 @@ function GameScreen({ app, setApp, go }) {
                   disabled={feedback !== null}
                   style={{
                     fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                    fontSize: 26, lineHeight: 1,
-                    padding: "12px 0",
-                    borderRadius: 12,
+                    fontSize: 18, lineHeight: 1,
+                    padding: "10px 0",
+                    borderRadius: 10,
                     border: "2px solid rgba(252,233,168,0.5)",
                     background: "rgba(10,6,35,0.55)",
                     color: "#fce9a8",
@@ -1422,11 +1431,11 @@ function GameScreen({ app, setApp, go }) {
             <CartesianPlane
               x={problem.targetX}
               y={problem.targetY}
-              max={6}
+              max={5}
               point={false}
               character={true}
               walkedX={walkedX}
-              walkedY={0}
+              walkedY={walkedY}
             />
             <div style={{
               display: "flex", alignItems: "center", gap: 12,
