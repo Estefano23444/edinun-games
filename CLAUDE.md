@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`edinun-games` — repo multi-juego para EDINUN GAMES (juegos de matemáticas para 6-8 años, originados como prototipo handoff de Claude Design). Cada juego es una carpeta autocontenida y portable bajo `juegos/<slug>/`. La raíz aloja **solo el landing** (lista de juegos) más copias maestras de los assets que ese landing necesita.
+`edinun-games` — repo multi-juego para EDINUN GAMES (juegos de matemáticas, originados como prototipo handoff de Claude Design). Cada juego es una carpeta autocontenida y portable bajo `juegos/<slug>/`. La raíz aloja **solo el landing** (lista de juegos) más copias maestras de los assets que ese landing necesita.
 
 Audiencia infantil; en móvil el lienzo es horizontal y el usuario gira el teléfono físicamente — el contenido **no rota** según orientación del sistema.
+
+**Audiencia por juego:** el default histórico es 6-8 años, pero la mayoría de los juegos recientes (JUEGO-5 en adelante) apuntan a 9-12 según el tema. Las excepciones están documentadas en [`memory/audiencia_por_juego.md`](memory/audiencia_por_juego.md) — consultarlo antes de tocar un juego existente. Para un juego nuevo, asumir 6-8 salvo indicación explícita del usuario.
 
 ## Estructura del repo
 
@@ -16,10 +18,16 @@ edinun-games/
 ├── styles.css              ← copia maestra que usa el landing
 ├── edinun-logo.png         ← copia maestra (favicon del landing)
 ├── assets/                 ← copias maestras (4 char-*.png + edinun-logo.svg/png)
+├── memory/                 ← memorias del repo (audiencia por juego, etc.)
 └── juegos/
-    ├── operaciones-basicas/   ← juego autocontenido + CLAUDE.md propio
-    └── valor-posicional/      ← idem
+    ├── JUEGO-1-valor-posicional/   ← convención: prefijo JUEGO-N-
+    ├── JUEGO-2-operaciones-avanzadas/
+    ├── … (JUEGO-3 a JUEGO-12)
+    ├── operaciones-basicas/        ← legacy sin prefijo (preservado)
+    └── operaciones-combinadas/     ← legacy sin prefijo (preservado)
 ```
+
+**Convención de slug:** los juegos nuevos usan el prefijo `JUEGO-N-<slug>` (N = siguiente ordinal libre). Dos juegos legacy (`operaciones-basicas`, `operaciones-combinadas`) conservan el nombre sin prefijo y no se renombran. El slug del folder debe coincidir byte a byte con la entrada `slug:` en el array `GAMES` del landing.
 
 Cada `juegos/<slug>/` debe seguir funcionando con doble clic aunque la copies fuera del repo (solo necesita internet para CDNs). Por eso duplica `styles.css`, `assets/`, los `.jsx` del shell y los HTML.
 
@@ -58,4 +66,7 @@ Si Python no está disponible (caso del autor: el `python` del PATH son stubs de
 
 ## Regenerar el landing
 
-`index.html` raíz embebe inline el código de `logo.jsx` + `characters.jsx` (de algún juego, alfabéticamente el primero) y un literal `GAMES = [{ slug, title, charId }, ...]` con un card por juego. Tras añadir / quitar / renombrar un juego en `juegos/`, hay que regenerar este array. La skill `edinun-game-builder` automatiza este paso; manualmente, ajustar el literal y verificar que las rutas `juegos/<slug>/` y los `charId` (`mago` / `fisica` / `numero` / `geo`) sean válidos.
+`index.html` raíz embebe inline el código de `logo.jsx` + `characters.jsx` (de algún juego, alfabéticamente el primero) y un literal `GAMES = [{ slug, title, charId }, ...]` con un card por juego. Tras añadir / quitar / renombrar un juego en `juegos/`, hay que regenerar este array. La skill `edinun-game-builder` automatiza este paso; manualmente, ajustar el literal y verificar que:
+
+- cada `slug:` coincide con un folder real en `juegos/`,
+- el `charId` está en {`mago`, `fisica`, `numero`, `geo`} y matchea al personaje destacado del juego.
