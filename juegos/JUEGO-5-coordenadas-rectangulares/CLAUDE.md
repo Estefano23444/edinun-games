@@ -77,6 +77,16 @@ Cada ronda usa el formato `{a, b, op, correctAnswer, userAnswer}` adaptado:
 ### Personajes
 Mismo catálogo que los demás juegos. **Personaje destacado en el landing: Pita** (`charId: "geo"`) por afinidad con coordenadas/geometría (mismo charId que `plano-cartesiano`).
 
+## Contador de visitas (server-side con fallback)
+
+A diferencia de los demás juegos del repo, este usa **`counter.php`** (en la raíz del juego) como contador global persistente. La lógica en `screens.jsx` (`useVisitorCount` / `markFirstAttempt`) fetcha el endpoint y cae a `localStorage` si el servidor no ejecuta PHP (GitHub Pages, `python -m http.server`, doble clic `file://`).
+
+- **Subir a edinun.com:** asegurarse de que la carpeta del juego tenga permisos de escritura para que PHP cree `counts/visits.txt`.
+- **Probar el contador real localmente:** `cd juegos\JUEGO-5-coordenadas-rectangulares && php -S localhost:8000`.
+- **No incluir `counts/visits.txt` en git** (es estado de producción). Ya hay un `.gitignore` que lo excluye, o agregar `counts/` al `.gitignore` raíz si no existe.
+
+Detalle completo del comportamiento por entorno y rationale del trade-off en `MEMORY.md` (sección 2026-05-14).
+
 ## QA responsive
 
 Antes de declarar completo, capturar el flujo en al menos: 1920×1080, 1280×800, 1024×768, 768×1024, 667×375, 375×667.

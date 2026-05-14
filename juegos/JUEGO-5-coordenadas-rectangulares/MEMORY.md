@@ -77,6 +77,71 @@ geometría (mismo charId que `plano-cartesiano` y `fracciones`).
 - Cosmic (15): `x y ( ) , → ↑ ↗ 0 1 2 3 4 A B`
 - Chalkboard (10): `x y ( ) , → ↑ A 0 1`
 
+## 2026-05-14 · Contador de visitas server-side (PHP) con fallback localStorage
+
+### Problema
+
+El contador histórico vivía en `localStorage` (`edinun_visitors_v1`). Eso
+da una cuenta **per-navegador**, no global. Síntoma reportado: en Chrome
+aparece "5 visitas" tras 5 cargas, en Firefox sobre el mismo link aparece
+"0". Cada navegador tiene su propio almacenamiento.
+
+El usuario hospeda los juegos en `https://www.edinun.com/juegos/simpl/...`
+(Apache). Esa página es un HTML que envuelve `JUEGO-5-coordenadas-rectangulares/index.html`
+dentro de un `<iframe>`. El servidor Apache acepta PHP.
+
+### Solución: `counter.php` + fetch desde el cliente con fallback
+
+- **`counter.php`** en la raíz del juego — endpoint mínimo (~40 líneas).
+  GET sin params → `{"count": N}`. GET `?inc=1` → incrementa atómicamente
+  (`flock` + `LOCK_EX`) y devuelve el nuevo conteo. Guarda en
+  `counts/visits.txt` (creado en demanda).
+- **`useVisitorCount()` / `markFirstAttempt()`** en `screens.jsx` —
+  fetch al endpoint, set state. Si el fetch falla (404, JSON parse error
+  por servir el `.php` como texto plano en GitHub Pages, network down)
+  caemos al contador `localStorage` previo. `localStorage` también cachea
+  el último valor servido por PHP para el primer paint (no quedar en 0).
+- **Idempotente por pestaña**: `sessionStorage` (`edinun_visit_counted_v1`)
+  marca la pestaña como contada, igual que antes. El POST `?inc=1` solo
+  ocurre una vez por sesión, disparado por `markFirstAttempt()` desde
+  `GameScreen` cuando el chico hace el primer intento real (no al cargar
+  Home).
+
+### Comportamiento por entorno
+
+| Entorno | Resultado |
+|---------|-----------|
+| **edinun.com (Apache + PHP)** | Contador global real. Persistente en `counts/visits.txt`. |
+| **GitHub Pages** | El `.php` se sirve como texto → JSON parse error → fallback localStorage (per-navegador, como antes). |
+| **Local con doble clic (file://)** | `fetch` falla por CORS → fallback localStorage. |
+| **Local con `python -m http.server`** | Igual que GitHub Pages: PHP se sirve como texto → fallback. |
+| **Local con `php -S localhost:8000`** | PHP ejecutado → contador global real, igual que edinun.com. |
+
+### Cómo probar el contador real localmente
+
+```powershell
+cd juegos\JUEGO-5-coordenadas-rectangulares
+php -S localhost:8000
+# abrir http://localhost:8000/ en Chrome y Firefox; el contador debe
+# coincidir entre navegadores (a diferencia del legacy localStorage).
+```
+
+### Permisos en edinun.com
+
+PHP necesita poder crear `counts/` y escribir `visits.txt` dentro de la
+carpeta del juego. Si Apache devuelve 500 al llamar `counter.php?inc=1`,
+verificar que el usuario del proceso PHP tenga permisos de escritura en
+`juegos/.../JUEGO-5-coordenadas-rectangulares/`. Alternativa: crear
+manualmente `counts/visits.txt` con permisos 666 antes de subir.
+
+### Por qué PHP y no Cloudflare Worker / Firebase
+
+El usuario priorizó cero terceros: edinun.com ya tiene Apache+PHP, no
+quiere depender de servicios externos (CountAPI cerró en 2024, Worker
+requiere cuenta Cloudflare). El tradeoff aceptado es que en GitHub Pages
+el contador no es global (cae a localStorage) — la validación real del
+conteo solo se ve en edinun.com.
+
 ## Anti-patrones a evitar
 
 - **No** confundir el formato `(letra, número)` (R1, mapa) con el plano
