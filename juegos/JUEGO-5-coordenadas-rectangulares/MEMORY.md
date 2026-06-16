@@ -142,6 +142,69 @@ requiere cuenta Cloudflare). El tradeoff aceptado es que en GitHub Pages
 el contador no es global (cae a localStorage) — la validación real del
 conteo solo se ve en edinun.com.
 
+## 2026-06-16 · Incidente en producción: contador 500 + juego en blanco
+
+### Qué pasó
+
+Tras subir JUEGO-5 a `https://edinun.com/juegos/simpl/matematica/numerosNaturales/`
+(envoltorio `planoCartesianoArrastrarLetras.html` que mete el juego en un
+`<iframe>`), el usuario reportó que **ni el contador ni el juego** funcionaban.
+El usuario aportó un `contador.php` de otro juego del **mismo servidor** que
+sí funciona (server "con todos los permisos").
+
+### Causa raíz del contador
+
+`counter.php` hacía `@mkdir(__DIR__.'/counts')` y escribía en
+`counts/visits.txt`. En hosting compartido es común que el usuario de Apache/PHP
+**pueda escribir archivos pero no crear subcarpetas** → `fopen('counts/...', 'c+')`
+devolvía `false` → HTTP 500 → el cliente caía a localStorage (per-navegador).
+El `contador.php` que sí funciona escribe su `.txt` **en su misma carpeta**, sin
+subcarpeta — ésa es la diferencia.
+
+### Fix del contador (aplicado)
+
+`counter.php` reescrito y endurecido:
+- Guarda el conteo en **`visits.txt` en la misma carpeta** del juego (no `counts/`).
+  Gitignore actualizado: `juegos/*/visits.txt` (se conserva `juegos/*/counts/`).
+- `error_reporting(0)` + `ini_set('display_errors','0')`: el body es **JSON puro
+  siempre** (un warning impreso antes del JSON rompía `JSON.parse` en el cliente).
+- `fopen('c+')` crea el archivo si falta; si no se puede abrir para escritura, cae
+  a **modo solo lectura** (devuelve el conteo sin incrementar) — el juego nunca se
+  rompe por el contador.
+- Cliente (`fetchVisitorCount` en `screens.jsx`) ahora **tolera dos contratos**:
+  JSON `{"count":N}` **o** número plano `"N"` (estilo del `contador.php` legacy del
+  server). Requirió re-empaquetar.
+
+### Causa del juego en blanco (CONFIRMADA con Console + Network del usuario)
+
+El bundle local está sano (índice == EDINUN GAMES byte a byte, `data-presets="react"`
+deja async nativo, sin `</script>` literal). El iframe y la ruta también estaban
+bien (`src="JUEGO-5-coordenadas-rectangulares/index.html"`, 200). **El problema era
+que el `index.html` subido al servidor era una versión VIEJA/equivocada** que carga
+`app.jsx` como archivo externo (visible en Network como XHR de Babel
+`transformScriptTags`) y NO carga `screens.jsx`:
+
+- Console: `Identifier 'useStateA' has already been declared` (app.jsx declarado dos
+  veces) + `ReferenceError: CosmosBg is not defined` (screens.jsx nunca cargó) →
+  pantalla en blanco.
+- El `index.html` correcto del repo es **autocontenido** (1 bloque
+  `<script type="text/babel">`, sin `src="*.jsx"`). `git log -p` confirmó que
+  NINGUNA versión del repo usó jamás jsx externos → el archivo del servidor no salió
+  de este repo (probable export viejo de prototipo Claude Design).
+
+**Fix:** sobreescribir el `index.html` del servidor con el del repo (autocontenido),
+subir el `counter.php` endurecido, borrar los `.jsx` sueltos del servidor, y
+Ctrl+Shift+R (todo venía de disk cache). Verificación: en Network ya no debe
+aparecer `app.jsx`. Procedimiento en `DIAGNOSTICO-JUEGO-5.md` (raíz). Nota: el server
+bloquea IPs de datacenter, así que no se puede curl-ear producción desde Claude.
+
+### Pendiente para el rollout
+
+Cuando se replique el contador a los otros 13 juegos (ver
+`.prompts/rollout-contador-juegos-restantes.md`), usar **este** `counter.php` y
+**este** `fetchVisitorCount` como patrón de referencia, no la versión `counts/`
+original.
+
 ## Anti-patrones a evitar
 
 - **No** confundir el formato `(letra, número)` (R1, mapa) con el plano

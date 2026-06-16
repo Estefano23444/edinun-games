@@ -81,11 +81,16 @@ Mismo catálogo que los demás juegos. **Personaje destacado en el landing: Pita
 
 A diferencia de los demás juegos del repo, este usa **`counter.php`** (en la raíz del juego) como contador global persistente. La lógica en `screens.jsx` (`useVisitorCount` / `markFirstAttempt`) fetcha el endpoint y cae a `localStorage` si el servidor no ejecuta PHP (GitHub Pages, `python -m http.server`, doble clic `file://`).
 
-- **Subir a edinun.com:** asegurarse de que la carpeta del juego tenga permisos de escritura para que PHP cree `counts/visits.txt`.
-- **Probar el contador real localmente:** `cd juegos\JUEGO-5-coordenadas-rectangulares && php -S localhost:8000`.
-- **No incluir `counts/visits.txt` en git** (es estado de producción). Ya hay un `.gitignore` que lo excluye, o agregar `counts/` al `.gitignore` raíz si no existe.
+**`counter.php` endurecido tras el incidente del 2026-06-16** (ver `MEMORY.md`):
+- Guarda el conteo en **`visits.txt` en la misma carpeta del juego** (no en una subcarpeta `counts/`). Razón: varios hosting compartido dejan escribir archivos pero **no crear subcarpetas** — el `mkdir` fallido tumbaba el endpoint con 500.
+- Suprime warnings de PHP (`error_reporting(0)`) para que el body sea **JSON puro siempre**; un warning impreso rompía `JSON.parse` en el cliente.
+- Si no puede escribir, cae a **modo solo lectura** (devuelve el conteo sin incrementar). El cliente `fetchVisitorCount` tolera tanto JSON `{"count":N}` como número plano.
 
-Detalle completo del comportamiento por entorno y rationale del trade-off en `MEMORY.md` (sección 2026-05-14).
+- **Subir a edinun.com:** asegurarse de que la carpeta del juego tenga permisos de escritura (755/775) para que PHP cree `visits.txt`.
+- **Probar el contador real localmente:** `cd juegos\JUEGO-5-coordenadas-rectangulares && php -S localhost:8000`.
+- **No incluir `visits.txt` en git** (estado de producción). `.gitignore` raíz ya excluye `juegos/*/visits.txt`.
+
+Detalle del comportamiento por entorno en `MEMORY.md` (secciones 2026-05-14 y 2026-06-16). Diagnóstico de producción para el usuario: `DIAGNOSTICO-JUEGO-5.md` (raíz del repo).
 
 ## QA responsive
 

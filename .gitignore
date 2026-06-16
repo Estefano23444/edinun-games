@@ -10,3 +10,4 @@ package-lock.json
 juegos/*/.planning/qa-screenshots/
 juegos/*/.planning/qa-results.json
 juegos/*/counts/
+juegos/*/visits.txt

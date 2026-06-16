@@ -76,9 +76,20 @@ async function fetchVisitorCount(opts) {
   const url = inc ? VISITOR_ENDPOINT + "?inc=1" : VISITOR_ENDPOINT;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error("counter http " + res.status);
-  const data = await res.json();
-  if (typeof data.count !== "number") throw new Error("counter invalid payload");
-  return data.count;
+  // Tolera dos contratos de servidor: JSON {"count": N} (counter.php de este
+  // repo) o un numero plano "N" (contador.php legacy de otros juegos del mismo
+  // server). Si el .php se sirve como texto ("<?php...") ambos parseos fallan
+  // -> NaN -> throw -> el cliente cae a localStorage.
+  const text = (await res.text()).trim();
+  let count;
+  try {
+    const data = JSON.parse(text);
+    count = data && typeof data.count === "number" ? data.count : Number(data);
+  } catch (e) {
+    count = Number(text);
+  }
+  if (!Number.isFinite(count)) throw new Error("counter invalid payload");
+  return count;
 }
 
 function readLocalVisitorCount() {

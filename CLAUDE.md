@@ -19,6 +19,9 @@ edinun-games/
 ├── edinun-logo.png         ← copia maestra (favicon del landing)
 ├── assets/                 ← copias maestras (4 char-*.png + edinun-logo.svg/png)
 ├── memory/                 ← memorias del repo (audiencia por juego, etc.)
+├── COMO-SUBIR-EL-JUEGO.md  ← guía de deploy (no técnica, versión corta)
+├── SUBIR-A-SERVIDOR.md     ← guía de deploy + diagnóstico del contador
+├── .prompts/               ← prompts one-off para sesiones "ciegas"
 └── juegos/
     ├── JUEGO-1-valor-posicional/   ← convención: prefijo JUEGO-N-
     ├── JUEGO-2-operaciones-avanzadas/
@@ -53,6 +56,32 @@ python juegos/<slug>/.planning/bundle.py
 Si Python no está disponible (caso del autor: el `python` del PATH son stubs del Microsoft Store), replica la lógica en PowerShell: concatenar los 5 `.jsx` en el orden `logo → characters → screens → game-screens → app` y reemplazar el bloque `<script type="text/babel">…</script>` en ambos HTML, manteniéndolos idénticos.
 
 **Invariante crítica del bundle:** ningún `.jsx` puede contener literal `</script>` (cerraría el bloque del navegador). Si se necesita dentro de un template literal, partirlo: `${"<\\/scr"+"ipt>"}`.
+
+## Contador de visitas (server-side con fallback)
+
+Cada juego muestra un contador de visitas global. El patrón de referencia vive en `juegos/JUEGO-5-coordenadas-rectangulares/` (ver su `MEMORY.md`, secciones 2026-05-14 y **2026-06-16** — esta última endurece el endpoint tras un incidente en producción):
+
+- **`counter.php`** en la raíz del juego: `GET` → `{"count": N}`; `GET ?inc=1` → incremento atómico (`flock(LOCK_EX)`) guardado en **`visits.txt` en la misma carpeta** del juego. Requiere Apache + PHP con permiso de escritura sobre la carpeta del juego. **No crea subcarpetas** (`mkdir counts/` fallaba con 500 en hosting compartido) y **suprime warnings** para que el body sea JSON puro.
+- **`screens.jsx`** (`useVisitorCount` / `markFirstAttempt`) hace `fetch` al endpoint y **cae a `localStorage`** si el servidor no ejecuta PHP (GitHub Pages, `python -m http.server`, doble clic `file://`). En ese modo el conteo es per-navegador. `fetchVisitorCount` tolera tanto JSON `{"count":N}` como número plano.
+- **Probar el contador real localmente:** `php -S localhost:8000` desde la carpeta del juego (no `python -m http.server`, que sirve el `.php` como texto).
+- **`visits.txt` está gitignoreado** (`juegos/*/visits.txt`); nunca commitearlo.
+
+**Estado actual:** solo JUEGO-5 tiene `counter.php`. El rollout a los 13 juegos restantes y al template de la skill está redactado pero pendiente en [`.prompts/rollout-contador-juegos-restantes.md`](.prompts/rollout-contador-juegos-restantes.md) — al hacerlo, usar la versión **endurecida** de JUEGO-5 (visits.txt same-dir), no la original con `counts/`. `counter.php` es **idéntico byte a byte** entre juegos — no se personaliza.
+
+## Deploy a producción
+
+Los juegos se suben a `https://www.edinun.com/...` (Apache + PHP) carpeta por carpeta. Dos guías en la raíz, ambas en lenguaje no técnico para quien sube:
+
+- [`COMO-SUBIR-EL-JUEGO.md`](COMO-SUBIR-EL-JUEGO.md) — versión corta.
+- [`SUBIR-A-SERVIDOR.md`](SUBIR-A-SERVIDOR.md) — incluye diagnóstico del contador (F12 → Network → `counter.php`) y cómo arreglar permisos (755 / 775).
+
+**Antes de subir, borrar `visits.txt` del juego** si existe (estado de prueba local; si se sube, el contador del servidor arranca inflado). El juego se incrusta en producción dentro de un `<iframe>` desde una página envoltorio — subir la **carpeta completa** del juego (`index.html` + `assets/` + `counter.php`) a la subcarpeta que apunta el `src` del iframe. Diagnóstico de fallas en producción: [`DIAGNOSTICO-JUEGO-5.md`](DIAGNOSTICO-JUEGO-5.md).
+
+## Artefactos gitignoreados y tooling
+
+`.gitignore` excluye: `juegos/*/visits.txt` (estado del contador), `juegos/*/counts/`, `juegos/*/.planning/qa-screenshots/`, `juegos/*/.planning/qa-results.json`, `uploads/`, `node_modules/`, `package-lock.json`, `reponsive/` (videos de QA). No commitear ninguno.
+
+`package.json` declara **Playwright** como `devDependency` — se usa para las capturas de QA responsive, no para el runtime del juego (que no tiene build). La carpeta `.prompts/` guarda prompts autocontenidos para sesiones "ciegas" (one-off, no parte del runtime).
 
 ## Editar el shell (afecta a todos los juegos)
 

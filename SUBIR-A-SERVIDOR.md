@@ -12,14 +12,14 @@ que esta guía explica.
 
 ## Antes de subir
 
-Borrá la carpeta `counts/` si existe dentro del juego (es estado de
+Borrá el archivo `visits.txt` si existe dentro del juego (es estado de
 pruebas local, no debe ir al servidor):
 
-- Por FTP / cliente: borrá la carpeta `counts/` dentro de
-  `JUEGO-X-…/` antes de subir.
+- Por FTP / cliente: borrá `visits.txt` dentro de `JUEGO-X-…/` antes de
+  subir (y la carpeta vieja `counts/` si quedó de versiones anteriores).
 - Por línea de comandos en tu computadora:
   ```bash
-  rm -rf juegos/JUEGO-5-coordenadas-rectangulares/counts
+  rm -f juegos/JUEGO-5-coordenadas-rectangulares/visits.txt
   ```
 
 Si se sube por error, el contador del servidor empieza con el número
@@ -54,9 +54,12 @@ fuente del archivo, PHP no está activo en el servidor.
 
 ## Arreglar permisos (si devuelve 500)
 
-PHP necesita poder crear una subcarpeta `counts/` dentro del juego y
-escribir el archivo `visits.txt` adentro. Esto es un permiso del
-sistema de archivos del servidor.
+PHP necesita poder escribir el archivo `visits.txt` dentro de la carpeta
+del juego. Esto es un permiso del sistema de archivos del servidor.
+
+> Nota: la versión nueva del contador escribe `visits.txt` **directamente
+> en la carpeta del juego** (ya no crea una subcarpeta `counts/`). Por eso
+> alcanza con dar permiso de escritura a la carpeta del juego.
 
 ### Opción 1 — cPanel / Administrador de archivos (lo más común)
 
@@ -85,19 +88,16 @@ Si sigue dando 500, repetí los pasos pero con **775** en vez de 755.
 ### Opción 3 — Crear el archivo a mano (si las opciones 1 y 2 no
 funcionan)
 
-Si el panel del hosting no deja cambiar permisos:
+Si el panel del hosting no deja cambiar permisos de la carpeta:
 
-1. Dentro de la carpeta del juego en el servidor, creá una subcarpeta
-   nueva llamada `counts`.
-2. Dentro de `counts`, creá un archivo nuevo llamado `visits.txt` con
-   contenido `0` (solo el número cero).
-3. Cambiá los permisos de `visits.txt` a **666** (Lectura/Escritura
+1. Dentro de la carpeta del juego en el servidor, creá un archivo nuevo
+   llamado `visits.txt` con contenido `0` (solo el número cero).
+2. Cambiá los permisos de `visits.txt` a **666** (Lectura/Escritura
    para todos).
-4. Cambiá los permisos de la carpeta `counts/` a **777** (todos los
-   permisos).
-5. Probá el juego.
+3. Probá el juego.
 
-Esta opción es menos elegante pero funciona en hostings muy restrictivos.
+Así PHP solo necesita escribir en un archivo que ya existe (no crear
+nada nuevo), que funciona incluso en hostings muy restrictivos.
 
 ## Qué hacer si nada de lo anterior funciona
 
