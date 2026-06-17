@@ -314,7 +314,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 1200;
+    const wait = isCorrect ? 950 : 2600;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -346,8 +346,8 @@ function GameScreen({ app, setApp, go }) {
     return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   }
 
-  const bocadilloText = "Convirtamos masa entre unidades.";
-  const instructionText = "Convierte la unidad";
+  const bocadilloText = "Convierte la masa a la unidad pedida.";
+  const instructionText = "⚖️ ¡Equilibra la balanza!";
 
   // Tile width / fontSize según largo del valor visible.
   // Hasta 7 cifras (1.000.000 mg = 1 kg).
@@ -431,35 +431,9 @@ function GameScreen({ app, setApp, go }) {
         ))}
       </div>
 
-      {/* Bocadillo de pista */}
-      <div data-qa="bocadillo" style={{
-        position: "absolute", left: 14, top: 130, width: 215,
-        pointerEvents: "none",
-      }}>
-        <div style={{
-          position: "relative",
-          background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
-          border: "1.5px solid rgba(242,194,96,0.55)",
-          borderRadius: 16,
-          padding: "12px 14px",
-          fontFamily: "var(--ed-font-display)",
-          fontWeight: 700, fontSize: 15, lineHeight: 1.25,
-          color: "#fce9a8", textAlign: "center",
-          boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
-        }}>
-          {bocadilloText}
-          <div style={{
-            position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
-            width: 0, height: 0,
-            borderLeft: "7px solid transparent",
-            borderRight: "7px solid transparent",
-            borderTop: "8px solid rgba(20,12,55,0.92)",
-            filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
-          }} />
-        </div>
-      </div>
-
-      {/* Personaje */}
+      {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
+          cabeza del personaje y ambos flotan juntos (la animación
+          ed-float-soft va en el grupo, no solo en el personaje). */}
       <div data-qa="personaje" style={{
         position: "absolute", left: 8, bottom: 90, width: 220,
         pointerEvents: "none", textAlign: "center",
@@ -471,7 +445,33 @@ function GameScreen({ app, setApp, go }) {
             background: "radial-gradient(ellipse, rgba(242,194,96,0.45), transparent 70%)",
             filter: "blur(5px)",
           }} />
-          <char.Component size={200} floating />
+          <div className="ed-float-soft" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {/* Bocadillo justo encima de la cabeza */}
+            <div style={{ position: "relative", width: 215, marginBottom: 8, zIndex: 2 }}>
+              <div style={{
+                position: "relative",
+                background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
+                border: "1.5px solid rgba(242,194,96,0.55)",
+                borderRadius: 16,
+                padding: "12px 14px",
+                fontFamily: "var(--ed-font-display)",
+                fontWeight: 700, fontSize: 15, lineHeight: 1.25,
+                color: "#fce9a8", textAlign: "center",
+                boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+              }}>
+                {bocadilloText}
+                <div style={{
+                  position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
+                  width: 0, height: 0,
+                  borderLeft: "7px solid transparent",
+                  borderRight: "7px solid transparent",
+                  borderTop: "8px solid rgba(20,12,55,0.92)",
+                  filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
+                }} />
+              </div>
+            </div>
+            <char.Component size={200} floating={false} />
+          </div>
         </div>
         <div style={{
           marginTop: -4,
@@ -484,7 +484,7 @@ function GameScreen({ app, setApp, go }) {
       {/* ══════ ZONA CENTRAL — ecuación de conversión ══════ */}
       <div data-qa="zona-central" style={{
         position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
-        width: 580, height: 340,
+        width: 580, bottom: 92,
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "space-evenly",
         textAlign: "center",

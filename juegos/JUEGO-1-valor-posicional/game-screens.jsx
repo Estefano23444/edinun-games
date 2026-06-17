@@ -305,7 +305,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 1200;
+    const wait = isCorrect ? 950 : 2600;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -365,12 +365,12 @@ function GameScreen({ app, setApp, go }) {
   // Hint del bocadillo según modo. CÓMO resolver, no QUÉ.
   const hintText = isDienes
     ? "Arrastra cada pieza a su columna."
-    : "Arrastra los dígitos a su lugar.";
+    : "Coloca cada dígito en su columna.";
 
   // Instrucción del ejercicio (en el centro).
   const exerciseInstruction = isDienes
-    ? "Completa el número usando decenas y unidades."
-    : "Escribe el número que dice el cartel:";
+    ? "🔢 ¡Arma el número con bloques!"
+    : "🔢 ¡Arma el número!";
 
   // Estado efímero de "drop incorrecto" — el contenedor que recibió la
   // pieza equivocada destella en rojo durante 700 ms.
@@ -463,45 +463,12 @@ function GameScreen({ app, setApp, go }) {
         </div>
       </div>
 
-      {/* Pista de juego — bocadillo en la zona superior izquierda, sobre el
-          personaje. Explica COMO resolver (no QUE resolver). El texto cambia
-          segun el modo activo (Dienes vs digitos posicionales). */}
-      <div style={{
-        position: "absolute", left: 14, top: 130, width: 215,
-        pointerEvents: "none",
-      }}>
-        <div style={{
-          position: "relative",
-          background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
-          border: "1.5px solid rgba(242,194,96,0.55)",
-          borderRadius: 16,
-          padding: "12px 14px",
-          fontFamily: "var(--ed-font-display)",
-          fontWeight: 700, fontSize: 15, lineHeight: 1.25,
-          color: "#fce9a8", textAlign: "center",
-          boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
-        }}>
-          {hintText}
-          {/* Pico del bocadillo apuntando hacia el personaje (abajo). */}
-          <div style={{
-            position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
-            width: 0, height: 0,
-            borderLeft: "7px solid transparent",
-            borderRight: "7px solid transparent",
-            borderTop: "8px solid rgba(20,12,55,0.92)",
-            filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
-          }} />
-        </div>
-      </div>
 
-      {/* Personaje compañero — lado izquierdo, elevado para no chocar con el
-          numpad. La frase motivadora aparece en el feedback central (con
-          atribución al personaje); el bocadillo de arriba lleva la pista
-          de mecánica del juego.
-          Sin z-index: queda en el orden natural del DOM, por encima de los
-          glifos del fondo pero por debajo de la ecuación, numpad y botones,
-          que vienen después en el JSX. */}
-      <div style={{
+      {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
+          cabeza del personaje y ambos flotan juntos (la animación
+          ed-float-soft va en el grupo, no solo en el personaje). El texto
+          cambia según el modo activo (Dienes vs dígitos posicionales). */}
+      <div data-qa="personaje" style={{
         position: "absolute", left: 8, bottom: 90, width: 220,
         pointerEvents: "none", textAlign: "center",
       }}>
@@ -512,7 +479,33 @@ function GameScreen({ app, setApp, go }) {
             background: "radial-gradient(ellipse, rgba(242,194,96,0.45), transparent 70%)",
             filter: "blur(5px)",
           }} />
-          <char.Component size={200} floating />
+          <div className="ed-float-soft" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {/* Bocadillo justo encima de la cabeza */}
+            <div style={{ position: "relative", width: 215, marginBottom: 8, zIndex: 2 }}>
+              <div style={{
+                position: "relative",
+                background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
+                border: "1.5px solid rgba(242,194,96,0.55)",
+                borderRadius: 16,
+                padding: "12px 14px",
+                fontFamily: "var(--ed-font-display)",
+                fontWeight: 700, fontSize: 15, lineHeight: 1.25,
+                color: "#fce9a8", textAlign: "center",
+                boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+              }}>
+                {hintText}
+                <div style={{
+                  position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
+                  width: 0, height: 0,
+                  borderLeft: "7px solid transparent",
+                  borderRight: "7px solid transparent",
+                  borderTop: "8px solid rgba(20,12,55,0.92)",
+                  filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
+                }} />
+              </div>
+            </div>
+            <char.Component size={200} floating={false} />
+          </div>
         </div>
         <div style={{
           marginTop: -4,
@@ -709,12 +702,14 @@ function GameScreen({ app, setApp, go }) {
               </div>
             </div>
 
-            {/* SLOTS del modo dígitos: top:233 — siguen al cabezal que bajó
-                20 px. Centro vertical y=290, alineado con la nueva
-                posición de la columna de botones. Slots de 92 px para
-                llenar el aire entre cabecera y numpad. */}
+            {/* SLOTS del modo dígitos: top:265 — bajados ~30 px respecto del
+                cabezal para repartir el aire vertical y eliminar la banda
+                vacía que quedaba entre los slots y el numpad (antes top:233,
+                bloque terminaba ~y=354 dejando ~108 px muertos hasta el
+                numpad en bottom:14). Centro vertical ~y=320, cerca de la
+                columna de botones (y=290). Slots de 92 px. */}
             <div style={{
-              position: "absolute", top: 233, left: 232, right: 200,
+              position: "absolute", top: 265, left: 232, right: 200,
               textAlign: "center",
             }}>
               {/* Etiquetas CMi DMi UMi · CM DM UM · C D U */}

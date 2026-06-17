@@ -407,7 +407,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 1200;
+    const wait = isCorrect ? 950 : 2600;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -530,38 +530,10 @@ function GameScreen({ app, setApp, go }) {
         </div>
       </div>
 
-      {/* Bocadillo de pista — JUSTO ARRIBA del personaje. Cambia según
-          el modo del problema. */}
-      <div data-qa="bocadillo" style={{
-        position: "absolute", left: 14, bottom: 230, width: 215,
-        pointerEvents: "none",
-      }}>
-        <div style={{
-          position: "relative",
-          background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
-          border: "1.5px solid rgba(242,194,96,0.55)",
-          borderRadius: 16,
-          padding: "12px 14px",
-          fontFamily: "var(--ed-font-display)",
-          fontWeight: 700, fontSize: 15, lineHeight: 1.3,
-          color: "#fce9a8", textAlign: "center",
-          boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
-        }}>
-          {problem.mode === "coords"
-            ? "Mira el punto: primero cuenta X, después Y."
-            : "Toca cada punto del producto A × B."}
-          <div style={{
-            position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
-            width: 0, height: 0,
-            borderLeft: "7px solid transparent",
-            borderRight: "7px solid transparent",
-            borderTop: "8px solid rgba(20,12,55,0.92)",
-            filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
-          }} />
-        </div>
-      </div>
-
-      {/* Personaje compañero */}
+      {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
+          cabeza del personaje y ambos flotan juntos (la animación
+          ed-float-soft va en el grupo, no solo en el personaje). Cambia
+          según el modo del problema. */}
       <div data-qa="personaje" style={{
         position: "absolute", left: 8, bottom: 30, width: 220,
         pointerEvents: "none", textAlign: "center",
@@ -573,7 +545,35 @@ function GameScreen({ app, setApp, go }) {
             background: "radial-gradient(ellipse, rgba(242,194,96,0.45), transparent 70%)",
             filter: "blur(5px)",
           }} />
-          <char.Component size={180} floating />
+          <div className="ed-float-soft" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {/* Bocadillo justo encima de la cabeza */}
+            <div style={{ position: "relative", width: 215, marginBottom: 8, zIndex: 2 }}>
+              <div style={{
+                position: "relative",
+                background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
+                border: "1.5px solid rgba(242,194,96,0.55)",
+                borderRadius: 16,
+                padding: "12px 14px",
+                fontFamily: "var(--ed-font-display)",
+                fontWeight: 700, fontSize: 15, lineHeight: 1.3,
+                color: "#fce9a8", textAlign: "center",
+                boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+              }}>
+                {problem.mode === "coords"
+                  ? "Mira el punto: primero cuenta X, después Y."
+                  : "Toca cada punto del producto A × B."}
+                <div style={{
+                  position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
+                  width: 0, height: 0,
+                  borderLeft: "7px solid transparent",
+                  borderRight: "7px solid transparent",
+                  borderTop: "8px solid rgba(20,12,55,0.92)",
+                  filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
+                }} />
+              </div>
+            </div>
+            <char.Component size={180} floating={false} />
+          </div>
         </div>
         <div style={{
           marginTop: -4,
@@ -610,10 +610,10 @@ function GameScreen({ app, setApp, go }) {
         whiteSpace: "nowrap", textAlign: "center",
       }}>
         {problem.mode === "coords" ? (
-          <span>¿Cuál es la coordenada del punto?</span>
+          <span>📍 ¿Cuál es la coordenada del punto?</span>
         ) : (
           <span>
-            Marca todos los pares de
+            ✖️ Marca todos los pares de
             <span style={{ color: "#fce9a8", marginLeft: 8 }}>A = {`(${problem.A.join(", ")})`}</span>
             <span style={{ color: "#fff", margin: "0 6px" }}>×</span>
             <span style={{ color: "#fce9a8" }}>B = {`(${problem.B.join(", ")})`}</span>
@@ -624,13 +624,15 @@ function GameScreen({ app, setApp, go }) {
       {/* Plano cartesiano — posición y tamaño según el modo:
           coords   → top fijo (118), rejilla compacta (step 36); deja
                      margen abajo para la bandeja con slots + numpad.
-          producto → centrado verticalmente (translate(-50%, -50%)),
-                     rejilla más grande (step 50); aprovecha el espacio
-                     porque no hay bandeja inferior. */}
+          producto → centrado verticalmente (translate(-50%, -50%), top
+                     322 para repartir el aire bajo el enunciado y dejar
+                     un margen inferior parejo), rejilla más grande
+                     (step 50); aprovecha el espacio porque no hay
+                     bandeja inferior. */}
       <div data-qa="zona-central" style={
         problem.mode === "coords"
           ? { position: "absolute", top: 118, left: "50%", transform: "translateX(-50%)", textAlign: "center" }
-          : { position: "absolute", top: 300, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }
+          : { position: "absolute", top: 322, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }
       }>
         <CartesianBoard
           target={problem.mode === "coords" ? { x: problem.x, y: problem.y } : null}

@@ -230,14 +230,17 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
   }
 
   // El cartel central se posiciona distinto según el modo:
-  //   vert     → top fijo arriba (la cuenta vertical es alta, no necesita
-  //              centrado vertical; el espacio natural a la bandeja queda
-  //              justo).
+  //   vert     → banda vertical entre el enunciado (top:100) y la bandeja
+  //              (numpad en bottom:14, ~90px de alto). Anclamos top + bottom y
+  //              centramos el contenido con flexbox. Antes era `top:150` con
+  //              flujo libre, que dejaba una banda vacía bajo los slots y el
+  //              enunciado pegado; ahora el contenido se reparte y queda
+  //              equilibrado sin chocar el numpad (~92 de guarda inferior).
   //   horiz, decimals, ints → centrado vertical en la zona disponible
   //              (translate(-50%, -50%)) porque son layouts cortos en una
   //              sola línea y si no se centran quedan pegados al tope.
   const wrapperBase = problem.mode === "vert"
-    ? { position: "absolute", top: 150, left: "50%", transform: "translateX(-50%)", textAlign: "center" }
+    ? { position: "absolute", top: 142, bottom: 92, left: "50%", transform: "translateX(-50%)", textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" }
     : { position: "absolute", top: 290, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" };
   const numberStyle = {
     fontFamily: "var(--ed-font-display)", fontWeight: 700,
@@ -600,7 +603,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 1200;
+    const wait = isCorrect ? 950 : 2600;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -734,51 +737,10 @@ function GameScreen({ app, setApp, go }) {
         </div>
       </div>
 
-      {/* Pista de juego — bocadillo en la zona superior izquierda, sobre el
-          personaje. Explica CÓMO resolver, en una línea corta. La pista
-          cambia según el modo del problema: la regla "de derecha a
-          izquierda" aplica para los modos vert/horiz, pero los modos
-          decimals e ints tienen reglas adicionales (coma fija, signo). */}
-      <div data-qa="bocadillo" style={{
-        position: "absolute", left: 14, top: 130, width: 215,
-        pointerEvents: "none",
-      }}>
-        <div style={{
-          position: "relative",
-          background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
-          border: "1.5px solid rgba(242,194,96,0.55)",
-          borderRadius: 16,
-          padding: "12px 14px",
-          fontFamily: "var(--ed-font-display)",
-          fontWeight: 700, fontSize: 16, lineHeight: 1.25,
-          color: "#fce9a8", textAlign: "center",
-          boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
-        }}>
-          {{
-            vert: "Toca un dígito — empieza por las unidades.",
-            horiz: "Toca un dígito y completa.",
-            decimals: "Toca un dígito — cuidado con la coma.",
-            ints: "Toca primero el signo, después el número.",
-          }[problem.mode] || "Toca un dígito y completa."}
-          {/* Pico del bocadillo apuntando hacia el personaje (abajo). */}
-          <div style={{
-            position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
-            width: 0, height: 0,
-            borderLeft: "7px solid transparent",
-            borderRight: "7px solid transparent",
-            borderTop: "8px solid rgba(20,12,55,0.92)",
-            filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
-          }} />
-        </div>
-      </div>
-
-      {/* Personaje compañero — lado izquierdo, elevado para no chocar con el
-          numpad. La frase motivadora aparece en el feedback central (con
-          atribución al personaje); el bocadillo de arriba lleva la pista
-          de mecánica del juego.
-          Sin z-index: queda en el orden natural del DOM, por encima de los
-          glifos del fondo pero por debajo de la ecuación, numpad y botones,
-          que vienen después en el JSX. */}
+      {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
+          cabeza del personaje y ambos flotan juntos (la animación
+          ed-float-soft va en el grupo, no solo en el personaje). La pista
+          cambia según el modo del problema. */}
       <div data-qa="personaje" style={{
         position: "absolute", left: 8, bottom: 90, width: 220,
         pointerEvents: "none", textAlign: "center",
@@ -790,7 +752,38 @@ function GameScreen({ app, setApp, go }) {
             background: "radial-gradient(ellipse, rgba(242,194,96,0.45), transparent 70%)",
             filter: "blur(5px)",
           }} />
-          <char.Component size={200} floating />
+          <div className="ed-float-soft" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {/* Bocadillo justo encima de la cabeza */}
+            <div style={{ position: "relative", width: 215, marginBottom: 8, zIndex: 2 }}>
+              <div style={{
+                position: "relative",
+                background: "linear-gradient(180deg, rgba(20,12,55,0.92), rgba(10,6,35,0.92))",
+                border: "1.5px solid rgba(242,194,96,0.55)",
+                borderRadius: 16,
+                padding: "12px 14px",
+                fontFamily: "var(--ed-font-display)",
+                fontWeight: 700, fontSize: 16, lineHeight: 1.25,
+                color: "#fce9a8", textAlign: "center",
+                boxShadow: "0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
+              }}>
+                {{
+                  vert: "Toca un dígito — empieza por las unidades.",
+                  horiz: "Toca un dígito y completa.",
+                  decimals: "Toca un dígito — cuidado con la coma.",
+                  ints: "Toca primero el signo, después el número.",
+                }[problem.mode] || "Toca un dígito y completa."}
+                <div style={{
+                  position: "absolute", bottom: -8, left: "50%", marginLeft: -7,
+                  width: 0, height: 0,
+                  borderLeft: "7px solid transparent",
+                  borderRight: "7px solid transparent",
+                  borderTop: "8px solid rgba(20,12,55,0.92)",
+                  filter: "drop-shadow(0 1px 0 rgba(242,194,96,0.55))",
+                }} />
+              </div>
+            </div>
+            <char.Component size={200} floating={false} />
+          </div>
         </div>
         <div style={{
           marginTop: -4,
@@ -828,7 +821,7 @@ function GameScreen({ app, setApp, go }) {
         textShadow: "0 2px 6px rgba(0,0,0,0.45)",
         whiteSpace: "nowrap",
       }}>
-        Resuelve la operación
+        🧮 ¡Resuelve la operación!
       </div>
 
       {/* ══════ ECUACIÓN PROTAGONISTA ══════
