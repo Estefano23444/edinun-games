@@ -270,6 +270,8 @@ function GameScreen({ app, setApp, go }) {
       }
     }
 
+    if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
+
     const isCorrect = value === problem.answer;
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;

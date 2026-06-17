@@ -147,6 +147,7 @@ function GameScreen({ app, setApp, go }) {
     }
     const joined = filled.join("");
     const entered = parseInt(joined, 10);
+    if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
     const isCorrect = entered === problem.answer;
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     // Estrellas por ejercicio: máximo 10, decrece con el tiempo. <3s → 10, +3s cada vez.
