@@ -1075,6 +1075,14 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca la respuesta correcta.
+  // R1/R2 (opción múltiple): { correct, wrong } → opción correcta en verde con ✓, la elegida en rojo.
+  // R3 (numpad): { correctSlot: "<valor correcto>" } → el slot conserva lo que
+  //   escribió el niño (en rojo) y aparece un cartel verde con el número correcto.
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en finalize).
+  const REVEAL_MS = 2800;
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [confirmingRestart, setConfirmingRestart] = useStateG(false);
   const [log, setLog] = useStateG([]);
@@ -1123,12 +1131,18 @@ function GameScreen({ app, setApp, go }) {
         userAnswer: userValue,
       };
     }
-    finalize(isCorrect, entry);
+    if (!isCorrect) {
+      // Mostrar la opción correcta (verde ✓) y la elegida (roja) antes del "¡UPS!".
+      setReveal({ correct: problem.correct, wrong: userValue });
+      setTimeout(() => { setReveal(null); finalize(false, entry); }, REVEAL_MS);
+      return;
+    }
+    finalize(true, entry);
   }
 
   // R3 — numpad guiado paso a paso. Si un paso falla, finaliza incorrecto.
   function verify() {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     if (slot === "") {
       setFeedback("err");
       setFeedbackMsg("Escribe un número");
@@ -1148,7 +1162,13 @@ function GameScreen({ app, setApp, go }) {
           correctAnswer: String(problem.targetX),
           userAnswer: slot,
         };
-        finalize(false, entry);
+        // Mantener lo que escribió el niño (en rojo) y mostrar el número
+        // correcto en un cartel verde aparte, antes del "¡UPS!".
+        setReveal({ correctSlot: String(problem.targetX) });
+        setTimeout(() => {
+          setReveal(null); setSlot("");
+          finalize(false, entry);
+        }, REVEAL_MS);
         return;
       }
       // Avanzar a paso 2
@@ -1176,7 +1196,13 @@ function GameScreen({ app, setApp, go }) {
       setTimeout(() => finalize(true, entry), 700);
       return;
     }
-    finalize(false, entry);
+    // Mantener lo que escribió el niño (en rojo) y mostrar el número
+    // correcto en un cartel verde aparte, antes del "¡UPS!".
+    setReveal({ correctSlot: String(problem.targetY) });
+    setTimeout(() => {
+      setReveal(null); setSlot("");
+      finalize(false, entry);
+    }, REVEAL_MS);
   }
 
   function finalize(isCorrect, partialEntry) {
@@ -1207,7 +1233,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -1234,12 +1260,14 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function pressDigit(d) {
-    if (problem.idx !== 2) return;
-    if (slot === "" && d === "0") return; // sin leading zero
-    if (slot.length < 1) setSlot(slot + d);
+    if (problem.idx !== 2 || reveal) return;
+    if (d === "0") return; // 0 no es respuesta válida en este juego (igual que antes)
+    // Respuesta de un solo dígito: tocar otro número REEMPLAZA el actual,
+    // así el niño puede corregir sin tener que tocar BORRAR primero.
+    setSlot(d);
   }
   function eraseLast() {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     if (slot !== "") setSlot(slot.slice(0, -1));
   }
 
@@ -1253,7 +1281,7 @@ function GameScreen({ app, setApp, go }) {
     setConfirmingRestart(false);
     setAttempted(0); setSolved(0);
     setStars(0); setStarsSession(0);
-    setFeedback(null); setFeedbackMsg("");
+    setFeedback(null); setFeedbackMsg(""); setReveal(null);
     setLog([]); setSlot(""); setStep(0); setWalkedX(0); setWalkedY(0);
     setProblem(makeProblem(cat, 0));
     started.current = Date.now();
@@ -1275,8 +1303,21 @@ function GameScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* HUD superior */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          {/* Indicador de RONDA pegado al logo (antes centrado en top:64,
+              donde se cruzaba con el enunciado). */}
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
         <div style={{
           position: "absolute", left: "50%", top: "50%",
@@ -1303,22 +1344,6 @@ function GameScreen({ app, setApp, go }) {
             ⭐ {stars}
           </div>
         </div>
-      </div>
-
-      {/* Indicador de Ronda */}
-      <div style={{
-        position: "absolute", top: 64, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
       </div>
 
       {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
@@ -1371,12 +1396,15 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* ZONA CENTRAL */}
+      {/* ZONA CENTRAL — enunciado fijo arriba (debajo del HUD) y el contenido
+          interactivo centrado en el espacio restante. Antes el enunciado iba
+          dentro de un space-evenly y quedaba flotando con un hueco arriba
+          (donde antes vivía el indicador de RONDA). */}
       <div data-qa="zona-central" style={{
-        position: "absolute", left: "50%", top: 96, transform: "translateX(-50%)",
+        position: "absolute", left: "50%", top: 80, transform: "translateX(-50%)",
         width: 580, bottom: problem.idx === 2 ? 92 : 28,
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "space-evenly",
+        alignItems: "center",
         textAlign: "center",
       }}>
         <div style={{
@@ -1388,6 +1416,13 @@ function GameScreen({ app, setApp, go }) {
           {instructionText}
         </div>
 
+        {/* Contenido interactivo de cada ronda, centrado verticalmente. */}
+        <div data-qa="zona-contenido" style={{
+          flex: 1, width: "100%",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "space-evenly",
+        }}>
+
         {/* R1 — Grid 5×5 con emojis */}
         {problem.idx === 0 && (
           <>
@@ -1396,39 +1431,65 @@ function GameScreen({ app, setApp, go }) {
               display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
               gap: 8, width: 360,
             }}>
-              {problem.options.map((opt, i) => (
+              {problem.options.map((opt, i) => {
+                const isCorrectOpt = reveal && reveal.correct != null && opt === reveal.correct;
+                const isWrongOpt = reveal && reveal.wrong != null && opt === reveal.wrong;
+                const locked = feedback !== null || reveal !== null;
+                return (
                 <button
                   key={i}
                   onClick={() => answerTap(opt)}
-                  disabled={feedback !== null}
+                  disabled={locked}
                   style={{
+                    position: "relative",
                     fontFamily: "var(--ed-font-display)", fontWeight: 700,
                     fontSize: 18, lineHeight: 1,
                     padding: "10px 0",
                     borderRadius: 10,
-                    border: "2px solid rgba(252,233,168,0.5)",
-                    background: "rgba(10,6,35,0.55)",
-                    color: "#fce9a8",
-                    cursor: feedback !== null ? "not-allowed" : "pointer",
+                    border: `2px solid ${
+                      isCorrectOpt ? "#2ecc8f" :
+                      isWrongOpt ? "#ff6b6b" :
+                      "rgba(252,233,168,0.5)"
+                    }`,
+                    background: isCorrectOpt ? "rgba(46,204,143,0.25)"
+                            : isWrongOpt ? "rgba(255,107,107,0.22)"
+                            : "rgba(10,6,35,0.55)",
+                    color: isCorrectOpt ? "#eafff4" : isWrongOpt ? "#ffe3e3" : "#fce9a8",
+                    cursor: locked ? "not-allowed" : "pointer",
                     textShadow: "0 0 14px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
-                    boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+                    boxShadow: isCorrectOpt ? "0 0 16px rgba(46,204,143,0.6)"
+                            : isWrongOpt ? "0 0 16px rgba(255,107,107,0.5)"
+                            : "0 6px 18px rgba(0,0,0,0.4)",
                     transition: "transform 0.15s ease, border-color 0.15s ease",
-                    opacity: feedback !== null ? 0.55 : 1,
+                    opacity: locked && !isCorrectOpt && !isWrongOpt ? 0.45 : 1,
                   }}
                   onMouseEnter={(e) => {
-                    if (feedback === null) {
+                    if (!locked) {
                       e.currentTarget.style.transform = "translateY(-3px)";
                       e.currentTarget.style.borderColor = "#4fd8ff";
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "none";
-                    e.currentTarget.style.borderColor = "rgba(252,233,168,0.5)";
+                    if (!locked) {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.borderColor = "rgba(252,233,168,0.5)";
+                    }
                   }}
                 >
                   {opt}
+                  {isCorrectOpt && (
+                    <span style={{
+                      position: "absolute", top: -8, right: -8,
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: "#2ecc8f", color: "#06281c",
+                      fontSize: 14, fontWeight: 900,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                    }}>✓</span>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -1441,39 +1502,65 @@ function GameScreen({ app, setApp, go }) {
               display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
               gap: 8, width: 340,
             }}>
-              {problem.options.map((opt, i) => (
+              {problem.options.map((opt, i) => {
+                const isCorrectOpt = reveal && reveal.correct != null && opt === reveal.correct;
+                const isWrongOpt = reveal && reveal.wrong != null && opt === reveal.wrong;
+                const locked = feedback !== null || reveal !== null;
+                return (
                 <button
                   key={i}
                   onClick={() => answerTap(opt)}
-                  disabled={feedback !== null}
+                  disabled={locked}
                   style={{
+                    position: "relative",
                     fontFamily: "var(--ed-font-display)", fontWeight: 700,
                     fontSize: 18, lineHeight: 1,
                     padding: "10px 0",
                     borderRadius: 10,
-                    border: "2px solid rgba(252,233,168,0.5)",
-                    background: "rgba(10,6,35,0.55)",
-                    color: "#fce9a8",
-                    cursor: feedback !== null ? "not-allowed" : "pointer",
+                    border: `2px solid ${
+                      isCorrectOpt ? "#2ecc8f" :
+                      isWrongOpt ? "#ff6b6b" :
+                      "rgba(252,233,168,0.5)"
+                    }`,
+                    background: isCorrectOpt ? "rgba(46,204,143,0.25)"
+                            : isWrongOpt ? "rgba(255,107,107,0.22)"
+                            : "rgba(10,6,35,0.55)",
+                    color: isCorrectOpt ? "#eafff4" : isWrongOpt ? "#ffe3e3" : "#fce9a8",
+                    cursor: locked ? "not-allowed" : "pointer",
                     textShadow: "0 0 14px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
-                    boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+                    boxShadow: isCorrectOpt ? "0 0 16px rgba(46,204,143,0.6)"
+                            : isWrongOpt ? "0 0 16px rgba(255,107,107,0.5)"
+                            : "0 6px 18px rgba(0,0,0,0.4)",
                     transition: "transform 0.15s ease, border-color 0.15s ease",
-                    opacity: feedback !== null ? 0.55 : 1,
+                    opacity: locked && !isCorrectOpt && !isWrongOpt ? 0.45 : 1,
                   }}
                   onMouseEnter={(e) => {
-                    if (feedback === null) {
+                    if (!locked) {
                       e.currentTarget.style.transform = "translateY(-3px)";
                       e.currentTarget.style.borderColor = "#4fd8ff";
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "none";
-                    e.currentTarget.style.borderColor = "rgba(252,233,168,0.5)";
+                    if (!locked) {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.borderColor = "rgba(252,233,168,0.5)";
+                    }
                   }}
                 >
                   {opt}
+                  {isCorrectOpt && (
+                    <span style={{
+                      position: "absolute", top: -8, right: -8,
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: "#2ecc8f", color: "#06281c",
+                      fontSize: 14, fontWeight: 900,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                    }}>✓</span>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -1497,13 +1584,29 @@ function GameScreen({ app, setApp, go }) {
               textShadow: "0 0 12px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.45)",
             }}>
               <span>{step === 0 ? "→" : "↑"}</span>
-              <SlotBox value={slot} feedback={feedback} size={48} />
+              {/* Al fallar: el slot conserva lo que el niño escribió (en rojo)
+                  y al lado aparece un cartel verde con el número correcto. */}
+              <SlotBox value={slot} feedback={reveal && reveal.correctSlot != null ? "err" : feedback} size={48} />
               <span style={{ fontSize: 18, color: "rgba(252,233,168,0.7)" }}>
                 {step === 0 ? "pasos a la derecha" : "pasos hacia arriba"}
               </span>
+              {reveal && reveal.correctSlot != null && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  padding: "8px 16px", borderRadius: 999,
+                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                  color: "#eafff4", fontSize: 18, fontWeight: 800,
+                  boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+                  whiteSpace: "nowrap",
+                }}>
+                  <span style={{ fontSize: 14, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                  ✓ {reveal.correctSlot}
+                </span>
+              )}
             </div>
           </>
         )}
+        </div>
       </div>
 
       {/* Numpad — solo R3 */}

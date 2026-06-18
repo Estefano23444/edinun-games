@@ -47,7 +47,7 @@ const ENCOURAGEMENTS = [
 // (0,0) es la esquina inferior izquierda; X crece hacia la derecha,
 // Y crece hacia arriba (convención matemática).
 // ─────────────────────────────────────────────────────────────
-function CartesianGrid({ problem, avatar, char, feedback, errorCell }) {
+function CartesianGrid({ problem, avatar, char, feedback, errorCell, reveal }) {
   // Convención de plano cartesiano: los puntos son las INTERSECCIONES de
   // las líneas, no el centro de las celdas. Por eso:
   //  - Las líneas de la rejilla pasan en x = 0, 1, 2, ..., GRID_MAX (en
@@ -216,6 +216,33 @@ function CartesianGrid({ problem, avatar, char, feedback, errorCell }) {
         }} />
       )}
 
+      {/* Revelado de la respuesta correcta — anillo verde con ✓ sobre la
+          intersección del tesoro (problem.x, problem.y), durante REVEAL_MS
+          antes del "¡UPS!". Convive con el círculo rojo de errorCell para que
+          el niño compare dónde estaba contra dónde puso a su personaje. */}
+      {reveal && (
+        <div style={{
+          position: "absolute",
+          left: cellLeft(reveal.x) - 20,
+          top:  cellTop(reveal.y) - 20,
+          width: 40, height: 40, borderRadius: "50%",
+          border: "3px solid #2ecc8f",
+          background: "rgba(46,204,143,0.25)",
+          boxShadow: "0 0 16px rgba(46,204,143,0.7)",
+          pointerEvents: "none",
+          zIndex: 6,
+        }}>
+          <span style={{
+            position: "absolute", top: -10, right: -10,
+            width: 22, height: 22, borderRadius: "50%",
+            background: "#2ecc8f", color: "#06281c",
+            fontSize: 14, fontWeight: 900,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+          }}>✓</span>
+        </div>
+      )}
+
       {/* Avatar del personaje — centrado sobre la intersección (avatar.x,
           avatar.y). El movimiento es exclusivamente por los botones
           direccionales de GameScreen. */}
@@ -260,6 +287,13 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca en el plano la celda
+  // correcta (verde con ✓) mientras la celda elegida por el niño queda en rojo,
+  // para que vea dónde estaba el tesoro. Bloquea inputs durante el revelado.
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en verify).
+  const REVEAL_MS = 2800;
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [log, setLog] = useStateG([]);
 
@@ -275,6 +309,7 @@ function GameScreen({ app, setApp, go }) {
   }, []);
 
   function reset() {
+    if (reveal) return;
     setAvatar({ x: 0, y: 0 });
   }
 
@@ -282,6 +317,7 @@ function GameScreen({ app, setApp, go }) {
   // los bordes del plano (no permite x<0, y<0, x>GRID_MAX, y>GRID_MAX).
   // No hay restricción de orden — el estudiante elige cómo moverse.
   function move(dx, dy) {
+    if (reveal) return;
     setAvatar((prev) => {
       const nx = Math.max(0, Math.min(GRID_MAX, prev.x + dx));
       const ny = Math.max(0, Math.min(GRID_MAX, prev.y + dy));
@@ -290,6 +326,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function verify() {
+    if (reveal) return; // bloqueado mientras se revela la respuesta correcta
     // Si el avatar sigue en (0,0) y el objetivo no es (0,0), pedir que se mueva
     // sin consumir intento (paralelo a "Completa todos los casilleros" en CDU).
     if (avatar.x === 0 && avatar.y === 0 && (problem.x !== 0 || problem.y !== 0)) {
@@ -305,38 +342,53 @@ function GameScreen({ app, setApp, go }) {
     // Estrellas por ejercicio: máximo 10, decrece con el tiempo.
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
 
-    const newAttempted = attempted + 1;
-    const newSolved = solved + (isCorrect ? 1 : 0);
-    const newStarsSession = starsSession + earned;
-    const newStarsTotal = stars + earned;
-
     const entry = {
-      idx: newAttempted,
       mode: "tesoro",
       a: problem.x,
       b: problem.y,
       op: "→",
       correctAnswer: `(${problem.x}, ${problem.y})`,
       userAnswer: `(${avatar.x}, ${avatar.y})`,
-      isCorrect,
       time: exerciseSec,
       earned,
     };
+
+    if (!isCorrect) {
+      // Antes del "¡UPS!": marcar la celda correcta (verde con ✓) y dejar la
+      // celda elegida por el niño en rojo, para que vea dónde estaba el tesoro.
+      setErrorCell({ x: avatar.x, y: avatar.y });
+      setReveal({ x: problem.x, y: problem.y });
+      setTimeout(() => {
+        setReveal(null);
+        setErrorCell(null);
+        finalize(false, entry);
+      }, REVEAL_MS);
+      return;
+    }
+    finalize(true, entry);
+  }
+
+  function finalize(isCorrect, partialEntry) {
+    const newAttempted = attempted + 1;
+    const newSolved = solved + (isCorrect ? 1 : 0);
+    const newStarsSession = starsSession + partialEntry.earned;
+    const newStarsTotal = stars + partialEntry.earned;
+
+    const entry = { idx: newAttempted, ...partialEntry, isCorrect };
     const newLog = [...log, entry];
 
     setFeedback(isCorrect ? "ok" : "err");
     setFeedbackMsg(isCorrect
-      ? `+${earned} ⭐`
+      ? `+${partialEntry.earned} ⭐`
       : ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]
     );
-    if (!isCorrect) setErrorCell({ x: avatar.x, y: avatar.y });
     setAttempted(newAttempted);
     setSolved(newSolved);
     setStars(newStarsTotal);
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -376,8 +428,19 @@ function GameScreen({ app, setApp, go }) {
       {/* Top HUD — sin tabs de nivel (este juego es de un solo nivel).
           Se conserva el logo a la izq y cronómetro + estrellas a la der. */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         <div style={{
@@ -463,27 +526,12 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* Racha / progreso — separado del HUD para coincidir con el resto del repo */}
+      {/* Instrucción del ejercicio — un solo elemento absoluto arriba, justo
+          debajo del HUD. Antes vivía en top:88 dejando un hueco encima (donde
+          estaba el indicador de RONDA, ahora movido junto al logo); se baja a
+          top:80 para que quede pegado al HUD. */}
       <div style={{
-        position: "absolute", top: 70, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
-      </div>
-
-      {/* Instrucción del ejercicio — un solo elemento absoluto arriba,
-          igual que en operaciones-avanzadas para mantener la estética
-          del repo. Personaliza con el nombre del personaje y las coords. */}
-      <div style={{
-        position: "absolute", top: 88, left: "50%", transform: "translateX(-50%)",
+        position: "absolute", top: 80, left: "50%", transform: "translateX(-50%)",
         fontFamily: "var(--ed-font-display)", fontWeight: 700,
         fontSize: 22, lineHeight: 1.15,
         color: "#fff",
@@ -493,12 +541,14 @@ function GameScreen({ app, setApp, go }) {
         📍 ¡Pon a {char.name} en (<span style={{ color: "#fce9a8" }}>{problem.x}</span>, <span style={{ color: "#fce9a8" }}>{problem.y}</span>)!
       </div>
 
-      {/* Plano cartesiano protagonista — centrado en la zona disponible.
-          Subo a top: 110 para dejar margen para la fila de botones
-          direccionales (la rejilla creció en alto al agregar tipPad=50
-          arriba para que la Y quede separada de la flecha rosa). */}
+      {/* Plano cartesiano protagonista — centrado verticalmente en el espacio
+          que queda entre el enunciado (top:80 + ~36 de alto) y la fila de
+          botones direccionales (bottom:18 + 64 de alto). Antes estaba clavado
+          en top:104, lo que dejaba el plano flotando alto bajo el enunciado;
+          ahora se centra en la región restante para un balance vertical. */}
       <div data-qa="zona-central" style={{
-        position: "absolute", top: 104, left: "50%", transform: "translateX(-50%)",
+        position: "absolute", top: 120, bottom: 96, left: "50%", transform: "translateX(-50%)",
+        display: "flex", alignItems: "center", justifyContent: "center",
         textAlign: "center",
       }}>
         <CartesianGrid
@@ -508,6 +558,7 @@ function GameScreen({ app, setApp, go }) {
           char={char}
           feedback={feedback}
           errorCell={errorCell}
+          reveal={reveal}
         />
       </div>
 
@@ -525,28 +576,31 @@ function GameScreen({ app, setApp, go }) {
           { label: "→", dx:  1, dy:  0, disabled: avatar.x >= GRID_MAX, color: "#4fd8ff" },
           { label: "↑", dx:  0, dy:  1, disabled: avatar.y >= GRID_MAX, color: "#ff79c6" },
           { label: "↓", dx:  0, dy: -1, disabled: avatar.y <= 0,        color: "#ff79c6" },
-        ].map((b) => (
+        ].map((b) => {
+          const locked = b.disabled || reveal !== null;
+          return (
           <button
             key={b.label}
             onClick={() => move(b.dx, b.dy)}
-            disabled={b.disabled}
+            disabled={locked}
             className="ed-numpad-key"
             style={{
               width: 64, height: 64, fontSize: 38,
-              borderColor: b.disabled ? "rgba(255,255,255,0.2)" : b.color,
+              borderColor: locked ? "rgba(255,255,255,0.2)" : b.color,
               borderWidth: 3, borderStyle: "solid",
-              opacity: b.disabled ? 0.32 : 1,
-              cursor: b.disabled ? "not-allowed" : "pointer",
+              opacity: locked ? 0.32 : 1,
+              cursor: locked ? "not-allowed" : "pointer",
               fontWeight: 900,
-              color: b.disabled ? "rgba(80,40,10,0.45)" : "#1a0e3a",
-              textShadow: b.disabled ? "none" : `0 0 6px ${b.color}99`,
+              color: locked ? "rgba(80,40,10,0.45)" : "#1a0e3a",
+              textShadow: locked ? "none" : `0 0 6px ${b.color}99`,
               lineHeight: 1,
             }}
             title={b.disabled ? "No puedes ir más allá del borde" : `Mover ${b.label}`}
           >
             {b.label}
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* Botones de acción — columna derecha, centrados verticalmente. */}

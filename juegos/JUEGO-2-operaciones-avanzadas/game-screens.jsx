@@ -214,7 +214,11 @@ function AnswerSlot({ idx, value, isActive, slots, feedback, setAnswer, eraseAt,
 // Encapsula los 4 layouts (vert / horiz / decimals / ints) y delega
 // los slots interactivos al componente AnswerSlot.
 // ─────────────────────────────────────────────────────────────
-function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feedback, setAnswer, eraseAt }) {
+function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feedback, reveal, setAnswer, eraseAt }) {
+  // Durante el revelado de la respuesta, los slots conservan lo que escribió el
+  // niño pero se marcan en ROJO (feedback "err"), mientras un cartel verde
+  // aparte muestra el resultado correcto.
+  const slotFeedback = reveal ? "err" : feedback;
   // Calcula el índice del slot "activo" (el siguiente que se va a llenar).
   //  - Si hay signSlot y el signo está vacío → el slot activo es el del signo
   //    (refuerza el orden pedagógico: signo primero, después dígitos).
@@ -230,18 +234,19 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
   }
 
   // El cartel central se posiciona distinto según el modo:
-  //   vert     → banda vertical entre el enunciado (top:100) y la bandeja
-  //              (numpad en bottom:14, ~90px de alto). Anclamos top + bottom y
-  //              centramos el contenido con flexbox. Antes era `top:150` con
-  //              flujo libre, que dejaba una banda vacía bajo los slots y el
-  //              enunciado pegado; ahora el contenido se reparte y queda
-  //              equilibrado sin chocar el numpad (~92 de guarda inferior).
-  //   horiz, decimals, ints → centrado vertical en la zona disponible
+  //   vert     → banda vertical entre el enunciado (ahora top:80, pegado al HUD)
+  //              y la bandeja (numpad en bottom:14, ~90px de alto). Anclamos
+  //              top + bottom y centramos el contenido con flexbox. El `top`
+  //              se bajó a 80 (era 142) tras mover el indicador de RONDA al
+  //              logo: así el contenido arranca justo bajo el enunciado y NO
+  //              queda el hueco vacío que dejaba la RONDA al irse de aquí.
+  //   horiz, decimals, ints → centrado vertical en la banda disponible
   //              (translate(-50%, -50%)) porque son layouts cortos en una
-  //              sola línea y si no se centran quedan pegados al tope.
+  //              sola línea; el ancla se bajó a 280 para acompañar el
+  //              enunciado más alto sin chocar el numpad.
   const wrapperBase = problem.mode === "vert"
-    ? { position: "absolute", top: 142, bottom: 92, left: "50%", transform: "translateX(-50%)", textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" }
-    : { position: "absolute", top: 290, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" };
+    ? { position: "absolute", top: 118, bottom: 92, left: "50%", transform: "translateX(-50%)", textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" }
+    : { position: "absolute", top: 280, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" };
   const numberStyle = {
     fontFamily: "var(--ed-font-display)", fontWeight: 700,
     fontSize: 48, color: "#fff", lineHeight: 1,
@@ -310,7 +315,7 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
           {Array.from({ length: slots }).map((_, i) => (
             <AnswerSlot
               key={i} idx={i} value={answer[i]} isActive={i === activeIdx}
-              slots={slots} feedback={feedback}
+              slots={slots} feedback={slotFeedback}
               setAnswer={setAnswer} eraseAt={eraseAt}
               width={DIGIT_W} height={64} fontSize={36}
             />
@@ -336,7 +341,7 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
             {Array.from({ length: slots }).map((_, i) => (
               <AnswerSlot
                 key={i} idx={i} value={answer[i]} isActive={i === activeIdx}
-                slots={slots} feedback={feedback}
+                slots={slots} feedback={slotFeedback}
                 setAnswer={setAnswer} eraseAt={eraseAt}
                 width={56} height={70} fontSize={38}
               />
@@ -364,7 +369,7 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
               <React.Fragment key={i}>
                 <AnswerSlot
                   idx={i} value={answer[i]} isActive={i === activeIdx}
-                  slots={slots} feedback={feedback}
+                  slots={slots} feedback={slotFeedback}
                   setAnswer={setAnswer} eraseAt={eraseAt}
                   width={50} height={64} fontSize={32}
                 />
@@ -396,7 +401,7 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
             {/* Slot de signo (índice 0) */}
             <AnswerSlot
               idx={0} value={answer[0]} isActive={0 === activeIdx}
-              slots={slots} feedback={feedback}
+              slots={slots} feedback={slotFeedback}
               setAnswer={setAnswer} eraseAt={eraseAt}
               width={48} height={68} fontSize={32}
             />
@@ -406,7 +411,7 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
               return (
                 <AnswerSlot
                   key={i} idx={i} value={answer[i]} isActive={i === activeIdx}
-                  slots={slots} feedback={feedback}
+                  slots={slots} feedback={slotFeedback}
                   setAnswer={setAnswer} eraseAt={eraseAt}
                   width={56} height={68} fontSize={36}
                 />
@@ -449,6 +454,15 @@ function GameScreen({ app, setApp, go }) {
   // ResultsScreen. Cada entrada: {idx, a, b, op, correctAnswer, userAnswer,
   // isCorrect, time, earned}.
   const [log, setLog] = useStateG([]);
+  // Fase "reveal": antes del overlay "¡UPS!" se muestra la respuesta correcta.
+  // Como los 4 modos usan numpad multi-casilla (no opción múltiple), el slot
+  // CONSERVA lo que escribió el niño (marcado en rojo vía feedback "err") y
+  // aparece un cartel verde aparte con el resultado correcto completo.
+  //   { correctText: "<resultado formateado>" }
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en verify).
+  const REVEAL_MS = 2800;
 
   // Especificación de slots según el modo del problema.
   //   digitCount: cantidad de slots de dígitos.
@@ -501,6 +515,7 @@ function GameScreen({ app, setApp, go }) {
   //    a izquierda (unidades primero) y lo llena. En modo decimals esto
   //    también respeta los slots decimales (los más a la derecha).
   function press(d) {
+    if (reveal) return; // durante el revelado de la respuesta, bloquea inputs
     const isSign = d === "+" || d === "−";
     setAnswer((prev) => {
       const next = [...prev];
@@ -521,6 +536,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function eraseAt(i) {
+    if (reveal) return; // bloquea borrado durante el revelado
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < slots) next.push(undefined);
@@ -529,6 +545,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function erase() {
+    if (reveal) return; // bloquea borrado durante el revelado
     // Borra el último valor colocado (el más a la izquierda entre los llenos).
     // Incluye el slot de signo si existe — el orden visual coincide con el
     // orden de inserción (signo primero, dígitos de derecha a izquierda).
@@ -542,6 +559,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function verify() {
+    if (reveal) return; // durante el revelado de la respuesta, ignora clics
     const filled = Array.from({ length: slots }, (_, i) => answer[i]);
     if (filled.some(d => d === undefined || d === "")) {
       // Faltan slots: feedback de error suave (no consume intento)
@@ -592,19 +610,15 @@ function GameScreen({ app, setApp, go }) {
     };
     const newLog = [...log, entry];
 
-    setFeedback(isCorrect ? "ok" : "err");
-    setFeedbackMsg(isCorrect
-      ? `+${earned} ⭐`
-      : ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]
-    );
     setAttempted(newAttempted);
     setSolved(newSolved);
     setStars(newStarsTotal);
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
-    setTimeout(() => {
+    // Avanza al siguiente ejercicio o a resultados. Se llama desde el overlay
+    // "¡UPS!" / "¡EXCELENTE!" tras el `wait` emocional.
+    const advance = () => {
       setFeedback(null);
       setFeedbackMsg("");
       setAnswer([]);
@@ -627,7 +641,29 @@ function GameScreen({ app, setApp, go }) {
         setProblem(makeProblem(cat));
         exerciseStart.current = Date.now();
       }
-    }, wait);
+    };
+
+    if (isCorrect) {
+      setFeedback("ok");
+      setFeedbackMsg(`+${earned} ⭐`);
+      setTimeout(advance, 950);
+      return;
+    }
+
+    // INCORRECTO — primero REVELAR la respuesta correcta (SIN overlay todavía):
+    //  - el slot conserva lo que escribió el niño marcado en rojo (vía `reveal`,
+    //    que EquationCanvas traduce a feedback "err" en los slots).
+    //  - aparece un cartel verde aparte con el resultado correcto completo.
+    // `feedback` se mantiene en null durante el revelado para NO disparar el
+    // overlay "¡UPS!" (que taparía el cartel). Recién al limpiar `reveal` se
+    // pone feedback="err" y aparece el "¡UPS!".
+    setReveal({ correctText: fmtAnswer(problem.answer, problem.mode) });
+    setTimeout(() => {
+      setReveal(null);
+      setFeedback("err");
+      setFeedbackMsg(ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]);
+      setTimeout(advance, 1100);
+    }, REVEAL_MS);
   }
 
   // Aplica un cambio de nivel desde los tabs: deriva nueva categoría,
@@ -650,6 +686,7 @@ function GameScreen({ app, setApp, go }) {
     setLog([]);
     setFeedback(null);
     setFeedbackMsg("");
+    setReveal(null);
     started.current = Date.now();
     exerciseStart.current = Date.now();
     setElapsed(0);
@@ -675,8 +712,19 @@ function GameScreen({ app, setApp, go }) {
           logo es más ancho que el timer/stars de la derecha. */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         {/* Izq: logo (mismo tamaño que CharacterScreen para consistencia) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         {/* Centro: barra de niveles — clickeable, anclada al centro real de la
@@ -793,28 +841,12 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* Racha / progreso — separado del HUD para que no se pegue a los tabs de nivel */}
-      <div style={{
-        position: "absolute", top: 70, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
-      </div>
-
       {/* Instrucción del ejercicio — un solo elemento absoluto, fuera del
           cartel central, para que aparezca siempre en la misma altura
           independientemente del modo y no se solape con la fila CDU del
           modo vertical (bug que mostraba la "U" tapando "Resuelvelo"). */}
       <div style={{
-        position: "absolute", top: 100, left: "50%", transform: "translateX(-50%)",
+        position: "absolute", top: 80, left: "50%", transform: "translateX(-50%)",
         fontFamily: "var(--ed-font-display)", fontWeight: 700,
         fontSize: 22, lineHeight: 1.15,
         color: "#fff",
@@ -840,9 +872,30 @@ function GameScreen({ app, setApp, go }) {
         slotsSpec={slotsSpec}
         firstDigitIdx={firstDigitIdx}
         feedback={feedback}
+        reveal={reveal}
         setAnswer={setAnswer}
         eraseAt={eraseAt}
       />
+
+      {/* Cartel verde con la respuesta correcta — solo durante el revelado tras
+          un fallo. Se ancla justo debajo del enunciado (centrado horizontal) y
+          NO sobrescribe lo que el niño escribió en los slots (que quedan rojos).
+          Mecanismo idéntico a JUEGO-5 (estado `reveal`, dura REVEAL_MS). */}
+      {reveal && (
+        <div style={{
+          position: "absolute", top: 116, left: "50%", transform: "translateX(-50%)",
+          display: "inline-flex", alignItems: "center", gap: 10,
+          padding: "10px 20px", borderRadius: 999,
+          background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+          color: "#eafff4", fontSize: 22, fontWeight: 800,
+          fontFamily: "var(--ed-font-display)",
+          boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+          whiteSpace: "nowrap", zIndex: 5,
+        }}>
+          <span style={{ fontSize: 14, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+          ✓ {reveal.correctText}
+        </div>
+      )}
 
       {/* Fichas arrastrables — fila inferior centrada. Las fichas dependen
           del modo: dígitos 0-9 en todos, más + y − cuando el modo es `ints`

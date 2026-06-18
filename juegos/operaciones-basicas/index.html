@@ -926,6 +926,14 @@ function GameScreen({ app, setApp, go }) {
   const [feedback, setFeedback] = useStateG(null); // 'ok' | 'err' | null
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
   const [hintOn, setHintOn] = useStateG(false);
+  // Fase "reveal": antes del overlay "¡UPS!" se revela la respuesta correcta.
+  // El niño conserva lo que escribió (slots en rojo) y aparece un cartel verde
+  // "Correcta: ✓ <resultado>" aparte (no sobrescribimos su input). Mismo patrón
+  // que JUEGO-5. Cuando reveal !== null, press/erase quedan bloqueados.
+  const [reveal, setReveal] = useStateG(null); // null | { correctAnswer }
+  // El revelado es el momento educativo → dura más. El overlay "¡UPS!"
+  // posterior es solo refuerzo emocional → corto (ver `wait` en finalize).
+  const REVEAL_MS = 2800;
   // Cambio de nivel desde los tabs del HUD: guarda el nivel propuesto
   // mientras se muestra el modal de confirmación. null = sin modal.
   const [pendingLevel, setPendingLevel] = useStateG(null);
@@ -954,6 +962,7 @@ function GameScreen({ app, setApp, go }) {
   // significativa (centena), answer[slots-1] es la unidad. Se llena de
   // derecha a izquierda: primero unidades, luego decenas, luego centenas.
   function press(d) {
+    if (reveal) return;
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < slots) next.push(undefined);
@@ -965,6 +974,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function eraseAt(i) {
+    if (reveal) return;
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < slots) next.push(undefined);
@@ -973,6 +983,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function erase() {
+    if (reveal) return;
     // Borra el último dígito colocado (el de más a la izquierda entre los llenos)
     setAnswer((prev) => {
       const next = [...prev];
@@ -984,6 +995,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function verify() {
+    if (reveal) return; // bloqueado durante el revelado de la respuesta
     const filled = Array.from({ length: slots }, (_, i) => answer[i]);
     if (filled.some(d => d === undefined || d === "")) {
       // Faltan dígitos: feedback de error suave (no consume intento)
@@ -996,6 +1008,25 @@ function GameScreen({ app, setApp, go }) {
     const entered = parseInt(joined, 10);
     if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
     const isCorrect = entered === problem.answer;
+    const entry = {
+      a: problem.a,
+      b: problem.b,
+      op: problem.op,
+      correctAnswer: problem.answer,
+      userAnswer: entered,
+    };
+
+    if (!isCorrect) {
+      // Revelar el RESULTADO correcto (cartel verde aparte) conservando lo que
+      // escribió el niño (slots en rojo). Tras REVEAL_MS, finalizar incorrecto.
+      setReveal({ correctAnswer: problem.answer });
+      setTimeout(() => { setReveal(null); finalize(false, entry); }, REVEAL_MS);
+      return;
+    }
+    finalize(true, entry);
+  }
+
+  function finalize(isCorrect, partialEntry) {
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     // Estrellas por ejercicio: máximo 10, decrece con el tiempo. <3s → 10, +3s cada vez.
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
@@ -1007,11 +1038,7 @@ function GameScreen({ app, setApp, go }) {
 
     const entry = {
       idx: newAttempted,
-      a: problem.a,
-      b: problem.b,
-      op: problem.op,
-      correctAnswer: problem.answer,
-      userAnswer: entered,
+      ...partialEntry,
       isCorrect,
       time: exerciseSec,
       earned,
@@ -1029,7 +1056,8 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    // El revelado ya mostró la correcta (REVEAL_MS); el "¡UPS!" es corto.
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -1078,6 +1106,7 @@ function GameScreen({ app, setApp, go }) {
     setLog([]);
     setFeedback(null);
     setFeedbackMsg("");
+    setReveal(null);
     started.current = Date.now();
     exerciseStart.current = Date.now();
     setElapsed(0);
@@ -1111,8 +1140,19 @@ function GameScreen({ app, setApp, go }) {
           logo es más ancho que el timer/stars de la derecha. */}
       <div style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         {/* Izq: logo (mismo tamaño que CharacterScreen para consistencia) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         {/* Centro: barra de niveles — clickeable, anclada al centro real de la
@@ -1220,22 +1260,6 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* Racha / progreso — separado del HUD para que no se pegue a los tabs de nivel */}
-      <div style={{
-        position: "absolute", top: 78, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
-      </div>
-
       {/* ══════ ECUACIÓN PROTAGONISTA ══════
           Centrada en la pantalla, ocupa el espacio principal.
           Columnas CDU alineadas verticalmente. Los slots quedan
@@ -1258,7 +1282,14 @@ function GameScreen({ app, setApp, go }) {
         const fullB = leftPadB.concat(padB);
         return (
           <div style={{
-            position: "absolute", top: 140, left: "50%", transform: "translateX(-50%)",
+            // El enunciado queda fijo arriba (justo bajo el HUD) y el grid de la
+            // ecuación se centra en el espacio restante. Antes el wrapper iba a
+            // top:140 sin centrado vertical, dejando un hueco arriba (donde antes
+            // vivía el indicador de RONDA, ahora pegado al logo). Patrón JUEGO-5:
+            // enunciado fijo + contenido envuelto en un flex:1 space-evenly.
+            position: "absolute", top: 80, left: "50%", transform: "translateX(-50%)",
+            bottom: 92,
+            display: "flex", flexDirection: "column", alignItems: "center",
             // El wrapper se ensancha para dar lugar a la instruccion en una
             // sola linea con un fontSize legible cuando el lienzo se escala
             // hacia abajo en telefonos. El equation grid interno sigue
@@ -1274,6 +1305,14 @@ function GameScreen({ app, setApp, go }) {
             }}>
               Toca un número de abajo para llenar.
             </div>
+
+            {/* Contenido interactivo (ecuación CDU) centrado verticalmente en el
+                espacio restante bajo el enunciado. */}
+            <div style={{
+              flex: 1, width: "100%",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "space-evenly",
+            }}>
 
             {/* Encabezado C D U — alineado sobre las columnas de dígitos */}
             <div style={{
@@ -1385,13 +1424,17 @@ function GameScreen({ app, setApp, go }) {
                     style={{
                       width: DIGIT_W, height: 72, fontSize: 42,
                       margin: "0 auto",
-                      borderColor: feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
-                      boxShadow: feedback === "ok"
-                        ? "0 0 18px rgba(46,204,143,0.65)"
-                        : feedback === "err"
-                          ? "0 0 18px rgba(255,107,107,0.65)"
-                          : undefined,
-                      color: "#fff",
+                      // Durante el revelado conservamos lo que escribió el niño
+                      // marcándolo en rojo (la correcta va en un cartel verde aparte).
+                      borderColor: reveal ? "#ff6b6b" : feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
+                      boxShadow: reveal
+                        ? "0 0 18px rgba(255,107,107,0.65)"
+                        : feedback === "ok"
+                          ? "0 0 18px rgba(46,204,143,0.65)"
+                          : feedback === "err"
+                            ? "0 0 18px rgba(255,107,107,0.65)"
+                            : undefined,
+                      color: reveal ? "#ffd9d9" : "#fff",
                       cursor: filled ? "grab" : "default",
                     }}
                   >
@@ -1399,6 +1442,25 @@ function GameScreen({ app, setApp, go }) {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Revelado: cartel verde con el RESULTADO correcto, aparte de los
+                slots del niño (que quedan en rojo). Patrón JUEGO-5. */}
+            {reveal && (
+              <div style={{
+                marginTop: 14,
+                display: "inline-flex", alignItems: "center", gap: 10,
+                padding: "10px 20px", borderRadius: 999,
+                background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                color: "#eafff4", fontFamily: "var(--ed-font-display)",
+                fontWeight: 800, fontSize: 26,
+                boxShadow: "0 0 18px rgba(46,204,143,0.5)",
+                whiteSpace: "nowrap",
+              }}>
+                <span style={{ fontSize: 15, color: "#bff5df", letterSpacing: "0.03em", fontWeight: 700 }}>Correcta:</span>
+                ✓ {reveal.correctAnswer}
+              </div>
+            )}
             </div>
           </div>
         );

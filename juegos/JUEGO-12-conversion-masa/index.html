@@ -1146,6 +1146,15 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca la respuesta correcta.
+  // R1/R2 (opción múltiple): { correctKey?, correctIdx?, wrongKey?, wrongIdx? }
+  //   → la opción correcta en verde con ✓, la elegida en rojo.
+  // R3 (numpad): { correctSlot: "<valor correcto>" } → los slots conservan lo
+  //   que escribió el niño (en rojo) y aparece un cartel verde con el número correcto.
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en finalize).
+  const REVEAL_MS = 2800;
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [confirmingRestart, setConfirmingRestart] = useStateG(false);
   const [log, setLog] = useStateG([]);
@@ -1192,7 +1201,7 @@ function GameScreen({ app, setApp, go }) {
     "Son iguales";
 
   function answerTapR1(chosen) {
-    if (problem.idx !== 0 || feedback !== null) return;
+    if (problem.idx !== 0 || feedback !== null || reveal !== null) return;
     const isCorrect = chosen === problem.outcome;
 
     if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
@@ -1204,12 +1213,19 @@ function GameScreen({ app, setApp, go }) {
       correctAnswer: outcomeLabel(problem.outcome),
       userAnswer: outcomeLabel(chosen),
     };
+    if (!isCorrect) {
+      // Marcar la opción correcta (verde ✓) y la elegida (roja) antes del "¡UPS!".
+      // En R1 el lado correcto baja la balanza, así que mantenemos el tilt visible.
+      setReveal({ correctKey: problem.outcome, wrongKey: chosen });
+      setTimeout(() => { setReveal(null); finalize(false, entry); }, REVEAL_MS);
+      return;
+    }
     finalize(isCorrect, entry);
   }
 
   // ────── R2: tap directo sobre la opción NO equivalente ──────
   function answerTapR2(chosenIdx) {
-    if (problem.idx !== 1 || feedback !== null) return;
+    if (problem.idx !== 1 || feedback !== null || reveal !== null) return;
     const chosen = problem.options[chosenIdx];
     const isCorrect = chosen.isFalse === true;
 
@@ -1224,12 +1240,19 @@ function GameScreen({ app, setApp, go }) {
       correctAnswer: `${fmt(falseOption.value)} ${falseOption.unit}`,
       userAnswer: `${fmt(chosen.value)} ${chosen.unit}`,
     };
+    if (!isCorrect) {
+      // Marcar la opción correcta (la falsa, en verde ✓) y la elegida (roja) antes del "¡UPS!".
+      const correctIdx = problem.options.findIndex((o) => o.isFalse);
+      setReveal({ correctIdx, wrongIdx: chosenIdx });
+      setTimeout(() => { setReveal(null); finalize(false, entry); }, REVEAL_MS);
+      return;
+    }
     finalize(isCorrect, entry);
   }
 
   // ────── R3: numpad paso a paso ──────
   function pressDigit(d) {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     for (let i = 0; i < slots.length; i++) {
       if (slots[i] === "_") {
         if (i === 0 && d === "0") {
@@ -1245,7 +1268,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function eraseLast() {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     for (let i = slots.length - 1; i >= 0; i--) {
       if (slots[i] !== "_" && slots[i] !== ",") {
         const next = [...slots];
@@ -1257,7 +1280,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function verify() {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     const target = currentStepIdx === 0 ? problem.midValue : problem.finalValue;
 
     const allFilled = slots.every((s) => s !== "_");
@@ -1282,7 +1305,14 @@ function GameScreen({ app, setApp, go }) {
         correctAnswer: fmt(problem.finalValue),
         userAnswer: fmt(userVal),
       };
-      finalize(false, entry);
+      // Conservar lo que escribió el niño (los slots, en rojo) y mostrar el
+      // número correcto del paso actual en un cartel verde aparte, antes del "¡UPS!".
+      const correctUnit = currentStepIdx === 0 ? problem.midUnit : problem.finalUnit;
+      setReveal({ correctSlot: `${fmt(target)} ${correctUnit}` });
+      setTimeout(() => {
+        setReveal(null);
+        finalize(false, entry);
+      }, REVEAL_MS);
       return;
     }
 
@@ -1343,7 +1373,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -1381,6 +1411,7 @@ function GameScreen({ app, setApp, go }) {
     setLog([]);
     setFeedback(null);
     setFeedbackMsg("");
+    setReveal(null);
     started.current = Date.now();
     exerciseStart.current = Date.now();
   }
@@ -1408,8 +1439,19 @@ function GameScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* HUD superior */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         <div style={{
@@ -1438,22 +1480,6 @@ function GameScreen({ app, setApp, go }) {
             ⭐ {stars}
           </div>
         </div>
-      </div>
-
-      {/* Indicador de Ronda */}
-      <div style={{
-        position: "absolute", top: 64, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
       </div>
 
       {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
@@ -1506,15 +1532,19 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* ══════ ZONA CENTRAL ══════ */}
+      {/* ══════ ZONA CENTRAL ══════
+          Enunciado fijo arriba (debajo del HUD) y el contenido interactivo
+          centrado en el espacio restante. Antes el enunciado iba dentro de un
+          space-evenly y quedaba flotando con un hueco arriba (donde antes vivía
+          el indicador de RONDA, ahora movido al logo). */}
       <div data-qa="zona-central" style={{
         position: "absolute", left: "50%",
-        top: 88,
+        top: 80,
         bottom: problem.idx === 2 ? 100 : 18,
         transform: "translateX(-50%)",
         width: 600,
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "space-evenly",
+        alignItems: "center",
         textAlign: "center",
       }}>
         {/* Instrucción */}
@@ -1527,14 +1557,23 @@ function GameScreen({ app, setApp, go }) {
           {instructionText}
         </div>
 
+        {/* Contenido interactivo de cada ronda, centrado verticalmente. */}
+        <div data-qa="zona-contenido" style={{
+          flex: 1, width: "100%",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "space-evenly",
+        }}>
+
         {/* ────── R1: Balanza binaria ────── */}
         {problem.idx === 0 && (() => {
           // Tilt visual: el lado más PESADO baja.
           // CSS rotate(+N): el extremo DERECHO baja (clockwise).
           // CSS rotate(-N): el extremo IZQUIERDO baja (counter-clockwise).
-          const tilt = feedback !== null
+          // Se inclina tanto al resolver (feedback) como al revelar la correcta.
+          const tilt = (feedback !== null || reveal !== null)
             ? (problem.outcome === "left" ? -7 : problem.outcome === "right" ? 7 : 0)
             : 0;
+          const locked = feedback !== null || reveal !== null;
 
           // Platillo (cup-shape con valor adentro). Reusable para left/right.
           const Pan = ({ value, unit }) => (
@@ -1612,12 +1651,12 @@ function GameScreen({ app, setApp, go }) {
                     style={{
                       position: "absolute", top: 8, left: 6,
                       transform: "translateX(-50%)",
-                      cursor: feedback !== null ? "not-allowed" : "pointer",
+                      cursor: locked ? "not-allowed" : "pointer",
                       transition: "transform 0.18s ease, filter 0.18s ease",
-                      filter: feedback !== null ? "none" : "drop-shadow(0 0 0 rgba(79,216,255,0))",
+                      filter: locked ? "none" : "drop-shadow(0 0 0 rgba(79,216,255,0))",
                     }}
                     onMouseEnter={(e) => {
-                      if (feedback === null) {
+                      if (!locked) {
                         e.currentTarget.style.transform = "translateX(-50%) scale(1.08)";
                         e.currentTarget.style.filter = "drop-shadow(0 0 14px rgba(79,216,255,0.7))";
                       }
@@ -1644,12 +1683,12 @@ function GameScreen({ app, setApp, go }) {
                     style={{
                       position: "absolute", top: 8, right: 6,
                       transform: "translateX(50%)",
-                      cursor: feedback !== null ? "not-allowed" : "pointer",
+                      cursor: locked ? "not-allowed" : "pointer",
                       transition: "transform 0.18s ease, filter 0.18s ease",
-                      filter: feedback !== null ? "none" : "drop-shadow(0 0 0 rgba(79,216,255,0))",
+                      filter: locked ? "none" : "drop-shadow(0 0 0 rgba(79,216,255,0))",
                     }}
                     onMouseEnter={(e) => {
-                      if (feedback === null) {
+                      if (!locked) {
                         e.currentTarget.style.transform = "translateX(50%) scale(1.08)";
                         e.currentTarget.style.filter = "drop-shadow(0 0 14px rgba(79,216,255,0.7))";
                       }
@@ -1699,40 +1738,66 @@ function GameScreen({ app, setApp, go }) {
                   { key: "left", label: "← IZQUIERDA" },
                   { key: "equal", label: "SON IGUALES" },
                   { key: "right", label: "DERECHA →" },
-                ].map((btn) => (
+                ].map((btn) => {
+                  const isCorrectOpt = reveal && reveal.correctKey != null && btn.key === reveal.correctKey;
+                  const isWrongOpt = reveal && reveal.wrongKey != null && btn.key === reveal.wrongKey;
+                  return (
                   <button
                     key={btn.key}
                     onClick={() => answerTapR1(btn.key)}
-                    disabled={feedback !== null}
-                    className={feedback === null ? "ed-pulse-glow" : ""}
+                    disabled={locked}
+                    className={!locked ? "ed-pulse-glow" : ""}
                     style={{
+                      position: "relative",
                       fontFamily: "var(--ed-font-display)", fontWeight: 800,
                       fontSize: 16, lineHeight: 1.1,
                       letterSpacing: "0.04em",
                       padding: "16px 0",
                       borderRadius: 14,
-                      border: "3px solid rgba(79,216,255,0.6)",
-                      background: "linear-gradient(180deg, rgba(20,12,55,0.7), rgba(10,6,35,0.88))",
-                      color: "#fce9a8",
-                      cursor: feedback !== null ? "not-allowed" : "pointer",
+                      border: `3px solid ${
+                        isCorrectOpt ? "#2ecc8f" :
+                        isWrongOpt ? "#ff6b6b" :
+                        "rgba(79,216,255,0.6)"
+                      }`,
+                      background: isCorrectOpt ? "rgba(46,204,143,0.25)"
+                              : isWrongOpt ? "rgba(255,107,107,0.22)"
+                              : "linear-gradient(180deg, rgba(20,12,55,0.7), rgba(10,6,35,0.88))",
+                      color: isCorrectOpt ? "#eafff4" : isWrongOpt ? "#ffe3e3" : "#fce9a8",
+                      cursor: locked ? "not-allowed" : "pointer",
                       textShadow: "0 0 14px rgba(252,233,168,0.4), 0 2px 6px rgba(0,0,0,0.4)",
+                      boxShadow: isCorrectOpt ? "0 0 16px rgba(46,204,143,0.6)"
+                              : isWrongOpt ? "0 0 16px rgba(255,107,107,0.5)"
+                              : "none",
                       transition: "transform 0.18s ease, border-color 0.18s ease",
-                      opacity: feedback !== null ? 0.55 : 1,
+                      opacity: locked && !isCorrectOpt && !isWrongOpt ? 0.45 : 1,
                     }}
                     onMouseEnter={(e) => {
-                      if (feedback === null) {
+                      if (!locked) {
                         e.currentTarget.style.transform = "translateY(-3px) scale(1.04)";
                         e.currentTarget.style.borderColor = "#fce9a8";
                       }
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "none";
-                      e.currentTarget.style.borderColor = "rgba(79,216,255,0.6)";
+                      if (!locked) {
+                        e.currentTarget.style.transform = "none";
+                        e.currentTarget.style.borderColor = "rgba(79,216,255,0.6)";
+                      }
                     }}
                   >
                     {btn.label}
+                    {isCorrectOpt && (
+                      <span style={{
+                        position: "absolute", top: -8, right: -8,
+                        width: 22, height: 22, borderRadius: "50%",
+                        background: "#2ecc8f", color: "#06281c",
+                        fontSize: 14, fontWeight: 900,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                      }}>✓</span>
+                    )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </>
           );
@@ -1756,40 +1821,67 @@ function GameScreen({ app, setApp, go }) {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, width: 480 }}>
-              {problem.options.map((op, i) => (
+              {problem.options.map((op, i) => {
+                const isCorrectOpt = reveal && reveal.correctIdx != null && i === reveal.correctIdx;
+                const isWrongOpt = reveal && reveal.wrongIdx != null && i === reveal.wrongIdx;
+                const locked = feedback !== null || reveal !== null;
+                return (
                 <button
                   key={i}
                   onClick={() => answerTapR2(i)}
-                  disabled={feedback !== null}
-                  className={feedback === null ? "ed-pulse-glow" : ""}
+                  disabled={locked}
+                  className={!locked ? "ed-pulse-glow" : ""}
                   style={{
+                    position: "relative",
                     display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6,
                     padding: "16px 0",
                     borderRadius: 16,
-                    border: "3px solid rgba(79,216,255,0.6)",
-                    background: "linear-gradient(180deg, rgba(20,12,55,0.7), rgba(10,6,35,0.88))",
-                    color: "#fce9a8",
-                    cursor: feedback !== null ? "not-allowed" : "pointer",
+                    border: `3px solid ${
+                      isCorrectOpt ? "#2ecc8f" :
+                      isWrongOpt ? "#ff6b6b" :
+                      "rgba(79,216,255,0.6)"
+                    }`,
+                    background: isCorrectOpt ? "rgba(46,204,143,0.25)"
+                            : isWrongOpt ? "rgba(255,107,107,0.22)"
+                            : "linear-gradient(180deg, rgba(20,12,55,0.7), rgba(10,6,35,0.88))",
+                    color: isCorrectOpt ? "#eafff4" : isWrongOpt ? "#ffe3e3" : "#fce9a8",
+                    cursor: locked ? "not-allowed" : "pointer",
                     fontFamily: "var(--ed-font-display)", fontWeight: 700,
                     textShadow: "0 0 14px rgba(252,233,168,0.5)",
+                    boxShadow: isCorrectOpt ? "0 0 16px rgba(46,204,143,0.6)"
+                            : isWrongOpt ? "0 0 16px rgba(255,107,107,0.5)"
+                            : "none",
                     transition: "transform 0.18s ease, border-color 0.18s ease",
-                    opacity: feedback !== null ? 0.55 : 1,
+                    opacity: locked && !isCorrectOpt && !isWrongOpt ? 0.45 : 1,
                   }}
                   onMouseEnter={(e) => {
-                    if (feedback === null) {
+                    if (!locked) {
                       e.currentTarget.style.transform = "translateY(-4px) scale(1.04)";
                       e.currentTarget.style.borderColor = "#fce9a8";
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "none";
-                    e.currentTarget.style.borderColor = "rgba(79,216,255,0.6)";
+                    if (!locked) {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.borderColor = "rgba(79,216,255,0.6)";
+                    }
                   }}
                 >
                   <span style={{ fontSize: 32 }}>{fmt(op.value)}</span>
                   <span style={{ fontSize: 20, opacity: 0.85 }}>{op.unit}</span>
+                  {isCorrectOpt && (
+                    <span style={{
+                      position: "absolute", top: -8, right: -8,
+                      width: 22, height: 22, borderRadius: "50%",
+                      background: "#2ecc8f", color: "#06281c",
+                      fontSize: 14, fontWeight: 900,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                    }}>✓</span>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -1863,12 +1955,28 @@ function GameScreen({ app, setApp, go }) {
                       }}>,</span>
                     );
                   }
-                  return <SlotBox key={i} value={tok === "_" ? "" : tok} feedback={feedback} size={slotSize()} />;
+                  // Al fallar: el slot conserva lo que el niño escribió (en rojo)
+                  // y al lado aparece un cartel verde con el número correcto.
+                  return <SlotBox key={i} value={tok === "_" ? "" : tok} feedback={reveal && reveal.correctSlot != null ? "err" : feedback} size={slotSize()} />;
                 })}
               </div>
+              {reveal && reveal.correctSlot != null && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  padding: "8px 16px", borderRadius: 999,
+                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                  color: "#eafff4", fontSize: 18, fontWeight: 800,
+                  boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+                  whiteSpace: "nowrap",
+                }}>
+                  <span style={{ fontSize: 14, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                  ✓ {reveal.correctSlot}
+                </div>
+              )}
             </div>
           </>
         )}
+        </div>
       </div>
 
       {/* Numpad — solo R3 */}

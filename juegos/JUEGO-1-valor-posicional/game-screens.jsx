@@ -165,6 +165,14 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se muestra la respuesta correcta.
+  // Mismo mecanismo que JUEGO-5: el input del niño se conserva (en rojo) y
+  // aparece un cartel verde con el número correcto. Bloquea toda entrada.
+  //   { correct: <número objetivo> }
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en finalize).
+  const REVEAL_MS = 2800;
   const [pendingLevel, setPendingLevel] = useStateG(null);
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [log, setLog] = useStateG([]);
@@ -186,16 +194,19 @@ function GameScreen({ app, setApp, go }) {
   // ─── Acciones modo Dienes ────────────────────────────────────
   const TENS_CAP = problem.mode === "dienes" ? Math.ceil((cat === "vp60" ? 60 : 40) / 10) : 0; // 4 o 6
   function addTen() {
+    if (reveal) return;
     if (tens >= TENS_CAP) return;
     setTens((t) => t + 1);
     setPieceHistory((h) => [...h, "t"]);
   }
   function addUnit() {
+    if (reveal) return;
     if (units >= 9) return;
     setUnits((u) => u + 1);
     setPieceHistory((h) => [...h, "u"]);
   }
   function removeLastPiece() {
+    if (reveal) return;
     if (pieceHistory.length === 0) return;
     const last = pieceHistory[pieceHistory.length - 1];
     setPieceHistory((h) => h.slice(0, -1));
@@ -209,6 +220,7 @@ function GameScreen({ app, setApp, go }) {
   const firstActive = totalSlots - usedSlots; // 0 si 9 cifras, 1 si 8
 
   function press(d, slotIdx) {
+    if (reveal) return;
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < totalSlots) next.push(undefined);
@@ -226,6 +238,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function eraseAtSlot(i) {
+    if (reveal) return;
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < totalSlots) next.push(undefined);
@@ -234,6 +247,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function eraseLastDigit() {
+    if (reveal) return;
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < totalSlots) next.push(undefined);
@@ -253,6 +267,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function verify() {
+    if (reveal) return;
     const value = getCurrentValue();
     if (isDienes) {
       if (tens === 0 && units === 0) {
@@ -276,6 +291,28 @@ function GameScreen({ app, setApp, go }) {
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
 
+    const entry = {
+      a: problem.a,
+      b: problem.b,
+      op: problem.op,
+      correctAnswer: problem.answer,
+      userAnswer: value,
+      time: exerciseSec,
+      earned,
+    };
+
+    if (!isCorrect) {
+      // Revelar la respuesta correcta (el input del niño queda en rojo y
+      // aparece un cartel verde con el número correcto) ANTES del "¡UPS!".
+      setReveal({ correct: problem.answer });
+      setTimeout(() => { setReveal(null); finalize(false, entry); }, REVEAL_MS);
+      return;
+    }
+    finalize(true, entry);
+  }
+
+  function finalize(isCorrect, partialEntry) {
+    const earned = isCorrect ? partialEntry.earned : 0;
     const newAttempted = attempted + 1;
     const newSolved = solved + (isCorrect ? 1 : 0);
     const newStarsSession = starsSession + earned;
@@ -283,14 +320,8 @@ function GameScreen({ app, setApp, go }) {
 
     const entry = {
       idx: newAttempted,
-      a: problem.a,
-      b: problem.b,
-      op: problem.op,
-      correctAnswer: problem.answer,
-      userAnswer: value,
+      ...partialEntry,
       isCorrect,
-      time: exerciseSec,
-      earned,
     };
     const newLog = [...log, entry];
 
@@ -305,7 +336,9 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    // El revelado ya cumplió el rol educativo del fallo → el overlay "¡UPS!"
+    // es solo refuerzo emocional y va corto, igual que el de acierto.
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -342,7 +375,7 @@ function GameScreen({ app, setApp, go }) {
     setAnswer([]);
     setSolved(0); setAttempted(0); setStarsSession(0);
     setLog([]);
-    setFeedback(null); setFeedbackMsg("");
+    setFeedback(null); setFeedbackMsg(""); setReveal(null);
     started.current = Date.now();
     exerciseStart.current = Date.now();
     setElapsed(0);
@@ -522,11 +555,13 @@ function GameScreen({ app, setApp, go }) {
       {isDienes && (() => {
         const total = tens * 10 + units;
         const baseTens = "#f5a623", baseUnits = "#4fa0ff";
-        const fbCol = feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : null;
+        // Durante el revelado, lo que armó el niño se marca en rojo (input
+        // equivocado) mientras un cartel verde muestra el número correcto.
+        const fbCol = reveal ? "#ff6b6b" : feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : null;
         const TENS_BORDER = wrongDrop === "tens" ? "#ff6b6b" : (fbCol || baseTens);
         const UNITS_BORDER = wrongDrop === "units" ? "#ff6b6b" : (fbCol || baseUnits);
-        const TENS_GLOW = wrongDrop === "tens" || feedback ? `0 0 14px ${TENS_BORDER}66` : "none";
-        const UNITS_GLOW = wrongDrop === "units" || feedback ? `0 0 14px ${UNITS_BORDER}66` : "none";
+        const TENS_GLOW = wrongDrop === "tens" || feedback || reveal ? `0 0 14px ${TENS_BORDER}66` : "none";
+        const UNITS_GLOW = wrongDrop === "units" || feedback || reveal ? `0 0 14px ${UNITS_BORDER}66` : "none";
 
         // Handlers de drop. Drop válido = pieza coincide con columna.
         const onDropTens = (e) => {
@@ -571,6 +606,20 @@ function GameScreen({ app, setApp, go }) {
               }}>
                 {problem.answer}
               </div>
+              {/* Cartel verde con la respuesta correcta durante el revelado. */}
+              {reveal && reveal.correct != null && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  marginTop: 10, padding: "8px 18px", borderRadius: 999,
+                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                  color: "#eafff4", fontFamily: "var(--ed-font-display)",
+                  fontSize: 20, fontWeight: 800,
+                  boxShadow: "0 0 16px rgba(46,204,143,0.5)", whiteSpace: "nowrap",
+                }}>
+                  <span style={{ fontSize: 13, color: "#bff5df", letterSpacing: "0.03em" }}>Decenas y unidades correctas:</span>
+                  ✓ {Math.floor(reveal.correct / 10)}D {reveal.correct % 10}U
+                </div>
+              )}
             </div>
 
             {/* CONTENEDORES DECENAS / UNIDADES — bajan 20 px junto con la
@@ -700,6 +749,21 @@ function GameScreen({ app, setApp, go }) {
               }}>
                 {numberToSpanish(problem.answer)}
               </div>
+              {/* Cartel verde con el número correcto durante el revelado.
+                  El input del niño se conserva (en rojo) en los slots. */}
+              {reveal && reveal.correct != null && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  marginTop: 10, padding: "8px 18px", borderRadius: 999,
+                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                  color: "#eafff4", fontFamily: "var(--ed-font-display)",
+                  fontSize: 20, fontWeight: 800,
+                  boxShadow: "0 0 16px rgba(46,204,143,0.5)", whiteSpace: "nowrap",
+                }}>
+                  <span style={{ fontSize: 13, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                  ✓ {fmtThousands(reveal.correct)}
+                </div>
+              )}
             </div>
 
             {/* SLOTS del modo dígitos: top:265 — bajados ~30 px respecto del
@@ -761,7 +825,7 @@ function GameScreen({ app, setApp, go }) {
                         onDragOver={(e) => { if (!disabled) { e.preventDefault(); e.currentTarget.classList.add("drag-over"); } }}
                         onDragLeave={(e) => e.currentTarget.classList.remove("drag-over")}
                         onDrop={(e) => {
-                          if (disabled) return;
+                          if (disabled || reveal) return;
                           e.preventDefault();
                           e.currentTarget.classList.remove("drag-over");
                           const data = e.dataTransfer.getData("text/plain");
@@ -792,8 +856,13 @@ function GameScreen({ app, setApp, go }) {
                           marginRight: i < SLOT_LABELS.length - 1 ? GAP : 0,
                           opacity: disabled ? 0.25 : 1,
                           pointerEvents: disabled ? "none" : "auto",
-                          borderColor: feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
-                          boxShadow: feedback === "ok"
+                          // Durante el revelado el input del niño queda en rojo
+                          // (es la respuesta equivocada); el número correcto se
+                          // muestra en el cartel verde del cabezal.
+                          borderColor: reveal ? "#ff6b6b" : feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
+                          boxShadow: reveal
+                            ? "0 0 18px rgba(255,107,107,0.65)"
+                            : feedback === "ok"
                             ? "0 0 18px rgba(46,204,143,0.65)"
                             : feedback === "err"
                               ? "0 0 18px rgba(255,107,107,0.65)"
@@ -914,14 +983,15 @@ function GameScreen({ app, setApp, go }) {
         <button
           className="ed-btn ed-btn-verify"
           onClick={verify}
-          style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
+          disabled={reveal !== null}
+          style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em", opacity: reveal ? 0.5 : 1 }}
         >
           ¡VERIFICAR!
         </button>
         <button
           className="ed-btn ed-btn-erase"
           onClick={isDienes ? removeLastPiece : eraseLastDigit}
-          disabled={isDienes ? pieceHistory.length === 0 : answer.every((d) => d === undefined || d === "")}
+          disabled={reveal !== null || (isDienes ? pieceHistory.length === 0 : answer.every((d) => d === undefined || d === ""))}
           style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
         >
           {isDienes ? "QUITAR ÚLTIMO" : "BORRAR"}

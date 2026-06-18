@@ -205,6 +205,32 @@ Cuando se replique el contador a los otros 13 juegos (ver
 **este** `fetchVisitorCount` como patrón de referencia, no la versión `counts/`
 original.
 
+## 2026-06-18 · Revelar la respuesta correcta antes del "¡UPS!"
+
+El usuario notó que al fallar solo salía el overlay "¡UPS!" con una frase de
+ánimo, sin mostrar **cuál era la respuesta correcta**. Pedido: marcar la
+correcta **antes** del overlay, no dentro de él.
+
+El revelado es el momento educativo, así que dura **más** que el overlay:
+`REVEAL_MS = 2800` ms para el revelado y `wait = 1100` ms para el "¡UPS!"
+(antes el "¡UPS!" duraba 2600 ms; se acortó porque verlo más tiempo no aporta).
+
+Implementación en `game-screens.jsx` — nuevo estado `reveal`:
+
+- **R1/R2 (opción múltiple):** al fallar, `setReveal({correct, wrong})`; la
+  opción correcta se pinta en verde con badge ✓ y la elegida en rojo, los
+  botones quedan bloqueados, y tras `REVEAL_MS` se llama a `finalize(false)`
+  (que dispara el "¡UPS!" de siempre).
+- **R3 (numpad):** no hay opciones que marcar, así que el slot muestra el
+  número correcto en verde (`reveal.slot`) durante `REVEAL_MS` antes del
+  overlay. `pressDigit`/`eraseLast`/`verify` se guardan con `if (reveal) return`.
+
+`reveal` también se resetea en `restartGame`. El dato ya existía en el log
+(`correctAnswer`); solo faltaba exponerlo en pantalla.
+
+**Pendiente:** replicar el patrón a los otros 13 juegos de mate (cada uno tiene
+su propia estructura de `game-screens.jsx`, no es copy-paste directo).
+
 ## Anti-patrones a evitar
 
 - **No** confundir el formato `(letra, número)` (R1, mapa) con el plano

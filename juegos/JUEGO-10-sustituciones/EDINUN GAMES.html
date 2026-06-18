@@ -1061,6 +1061,15 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca la respuesta correcta.
+  // R1/R2 (opción múltiple): { correct, wrong } → botón correcto en verde con ✓,
+  //   el elegido en rojo, todos bloqueados.
+  // R3 (numpad): { correctSlot: "<valor correcto>" } → los slots conservan lo que
+  //   escribió el niño (en rojo) y aparece un cartel verde con el número correcto.
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en finalize).
+  const REVEAL_MS = 2800;
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [confirmingRestart, setConfirmingRestart] = useStateG(false);
   const [log, setLog] = useStateG([]);
@@ -1114,12 +1123,18 @@ function GameScreen({ app, setApp, go }) {
       correctAnswer: tenthsToStr(problem.correctT),
       userAnswer: tenthsToStr(chosenT),
     };
-    finalize(isCorrect, entry);
+    if (!isCorrect) {
+      // Mostrar la opción correcta (verde ✓) y la elegida (roja) antes del "¡UPS!".
+      setReveal({ correct: problem.correctT, wrong: chosenT });
+      setTimeout(() => { setReveal(null); finalize(false, entry); }, REVEAL_MS);
+      return;
+    }
+    finalize(true, entry);
   }
 
   // Resolver R3 (numpad guiado, paso a paso).
   function verify() {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     const step = problem.steps[currentStepIdx];
     if (!step) return;
 
@@ -1170,7 +1185,13 @@ function GameScreen({ app, setApp, go }) {
         correctAnswer: tenthsToStr(problem.finalResult),
         userAnswer: tenthsToStr(userT),
       };
-      finalize(false, entry);
+      // Mantener lo que escribió el niño (en rojo) y mostrar el resultado
+      // correcto del paso en un cartel verde aparte, antes del "¡UPS!".
+      setReveal({ correctSlot: tenthsToStr(step.result) });
+      setTimeout(() => {
+        setReveal(null);
+        finalize(false, entry);
+      }, REVEAL_MS);
       return;
     }
 
@@ -1245,7 +1266,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -1273,7 +1294,7 @@ function GameScreen({ app, setApp, go }) {
 
   // Numpad para R3.
   function pressDigit(d) {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     for (let i = 0; i < slots.length; i++) {
       if (slots[i] === "_") {
         if (i === 0 && d === "0") {
@@ -1289,7 +1310,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function eraseLast() {
-    if (problem.idx !== 2) return;
+    if (problem.idx !== 2 || reveal) return;
     for (let i = slots.length - 1; i >= 0; i--) {
       if (slots[i] !== "_" && slots[i] !== ",") {
         const next = [...slots];
@@ -1314,6 +1335,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(0);
     setFeedback(null);
     setFeedbackMsg("");
+    setReveal(null);
     setLog([]);
     setCurrentStepIdx(0);
     setCompletedSteps([]);
@@ -1368,8 +1390,19 @@ function GameScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* HUD superior */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
         <div style={{
           position: "absolute", left: "50%", top: "50%",
@@ -1396,22 +1429,6 @@ function GameScreen({ app, setApp, go }) {
             ⭐ {stars}
           </div>
         </div>
-      </div>
-
-      {/* Indicador de Ronda */}
-      <div style={{
-        position: "absolute", top: 64, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
       </div>
 
       {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
@@ -1464,21 +1481,24 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* ══════ ZONA CENTRAL — un único contenedor que ocupa todo el alto disponible ══════
-          R1/R2: top 88, bottom 18 (sin numpad).
-          R3: top 88, bottom 100 (deja sitio al numpad anclado a bottom:14).
-          space-evenly reparte el alto entre todos los hijos sin huecos concentrados. */}
+      {/* ══════ ZONA CENTRAL — enunciado fijo arriba (debajo del HUD) y el
+          contenido interactivo centrado en el espacio restante. Antes el
+          enunciado iba dentro de un space-evenly y quedaba flotando con un
+          hueco arriba (donde antes vivía el indicador de RONDA, ahora pegado
+          al logo). El contenido interactivo se envuelve en un wrapper con
+          flex:1 + space-evenly para repartir el alto restante.
+          R1/R2: bottom 18 (sin numpad). R3: bottom 100 (numpad a bottom:14). */}
       <div data-qa="zona-central" style={{
         position: "absolute", left: "50%",
-        top: 88,
+        top: 80,
         bottom: problem.idx === 2 ? 100 : 18,
         transform: "translateX(-50%)",
         width: 600,
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "space-evenly",
+        alignItems: "center",
         textAlign: "center",
       }}>
-        {/* 1. Instrucción */}
+        {/* 1. Instrucción — fija arriba */}
         <div style={{
           fontFamily: "var(--ed-font-display)", fontWeight: 700,
           fontSize: 24, lineHeight: 1.1,
@@ -1487,6 +1507,13 @@ function GameScreen({ app, setApp, go }) {
         }}>
           {instructionText}
         </div>
+
+        {/* Contenido interactivo de cada ronda, centrado verticalmente. */}
+        <div data-qa="zona-contenido" style={{
+          flex: 1, width: "100%",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "space-evenly",
+        }}>
 
         {/* 2. Tabla de variables (R1 y R3) */}
         {(problem.idx === 0 || problem.idx === 2) && problem.vars && renderVarsTable(problem.vars)}
@@ -1549,62 +1576,109 @@ function GameScreen({ app, setApp, go }) {
               <span style={{ fontSize: 18, lineHeight: 1 }}>◀</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, width: 440 }}>
-              {problem.options.map((optT, i) => (
+              {problem.options.map((optT, i) => {
+                const isCorrectOpt = reveal && reveal.correct != null && optT === reveal.correct;
+                const isWrongOpt = reveal && reveal.wrong != null && optT === reveal.wrong;
+                const locked = feedback !== null || reveal !== null;
+                return (
                 <button
                   key={i}
                   onClick={() => answerTap(optT)}
-                  disabled={feedback !== null}
-                  className={feedback === null ? "ed-pulse-glow" : ""}
+                  disabled={locked}
+                  className={!locked ? "ed-pulse-glow" : ""}
                   style={{
+                    position: "relative",
                     fontFamily: "var(--ed-font-display)", fontWeight: 700,
                     fontSize: 38, lineHeight: 1,
                     padding: "18px 0",
                     borderRadius: 16,
-                    border: "3px solid rgba(79,216,255,0.6)",
-                    background: "linear-gradient(180deg, rgba(20,12,55,0.7), rgba(10,6,35,0.88))",
-                    color: "#fce9a8",
-                    cursor: feedback !== null ? "not-allowed" : "pointer",
+                    border: `3px solid ${
+                      isCorrectOpt ? "#2ecc8f" :
+                      isWrongOpt ? "#ff6b6b" :
+                      "rgba(79,216,255,0.6)"
+                    }`,
+                    background: isCorrectOpt ? "rgba(46,204,143,0.25)"
+                            : isWrongOpt ? "rgba(255,107,107,0.22)"
+                            : "linear-gradient(180deg, rgba(20,12,55,0.7), rgba(10,6,35,0.88))",
+                    color: isCorrectOpt ? "#eafff4" : isWrongOpt ? "#ffe3e3" : "#fce9a8",
+                    cursor: locked ? "not-allowed" : "pointer",
                     textShadow: "0 0 16px rgba(252,233,168,0.55), 0 2px 6px rgba(0,0,0,0.5)",
+                    boxShadow: isCorrectOpt ? "0 0 18px rgba(46,204,143,0.6)"
+                            : isWrongOpt ? "0 0 18px rgba(255,107,107,0.5)"
+                            : "none",
                     transition: "transform 0.18s ease, border-color 0.18s ease",
-                    opacity: feedback !== null ? 0.55 : 1,
+                    opacity: locked && !isCorrectOpt && !isWrongOpt ? 0.45 : 1,
                   }}
                   onMouseEnter={(e) => {
-                    if (feedback === null) {
+                    if (!locked) {
                       e.currentTarget.style.transform = "translateY(-4px) scale(1.04)";
                       e.currentTarget.style.borderColor = "#fce9a8";
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "none";
-                    e.currentTarget.style.borderColor = "rgba(79,216,255,0.6)";
+                    if (!locked) {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.borderColor = "rgba(79,216,255,0.6)";
+                    }
                   }}
                 >
                   {tenthsToStr(optT)}
+                  {isCorrectOpt && (
+                    <span style={{
+                      position: "absolute", top: -8, right: -8,
+                      width: 26, height: 26, borderRadius: "50%",
+                      background: "#2ecc8f", color: "#06281c",
+                      fontSize: 16, fontWeight: 900,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                    }}>✓</span>
+                  )}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* 5b. Slots del paso activo (R3) — último hijo, queda justo arriba del numpad */}
+        {/* 5b. Slots del paso activo (R3) — último hijo, queda justo arriba del numpad.
+            Al fallar: los slots conservan lo que el niño escribió (en rojo) y al
+            lado aparece un cartel verde con el resultado correcto del paso. */}
         {problem.idx === 2 && currentStepIdx < problem.steps.length && (
           <div style={{
-            display: "flex", alignItems: "center", gap: 4,
+            display: "flex", alignItems: "center", gap: 8,
           }}>
-            {slots.map((tok, i) => {
-              if (tok === ",") {
-                return (
-                  <span key={i} style={{
-                    fontSize: 30, color: "#fce9a8",
-                    padding: "0 1px",
-                    fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                  }}>,</span>
-                );
-              }
-              return <SlotBox key={i} value={tok === "_" ? "" : tok} feedback={feedback} size={slotSize()} />;
-            })}
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              {slots.map((tok, i) => {
+                if (tok === ",") {
+                  return (
+                    <span key={i} style={{
+                      fontSize: 30, color: "#fce9a8",
+                      padding: "0 1px",
+                      fontFamily: "var(--ed-font-display)", fontWeight: 700,
+                    }}>,</span>
+                  );
+                }
+                return <SlotBox key={i} value={tok === "_" ? "" : tok}
+                  feedback={reveal && reveal.correctSlot != null ? "err" : feedback}
+                  size={slotSize()} />;
+              })}
+            </div>
+            {reveal && reveal.correctSlot != null && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "8px 16px", borderRadius: 999,
+                background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                color: "#eafff4", fontSize: 20, fontWeight: 800,
+                boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+                whiteSpace: "nowrap",
+              }}>
+                <span style={{ fontSize: 14, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                ✓ {reveal.correctSlot}
+              </span>
+            )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Numpad — solo R3 */}

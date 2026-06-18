@@ -245,6 +245,15 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca la respuesta correcta.
+  // frac1 (no opción múltiple, no se usa reveal de opciones).
+  // frac2 / frac3 (numpad): { correctSlot: "<fracción correcta>" } → los slots
+  //   conservan lo que escribió el niño (en rojo) y aparece un cartel verde
+  //   con la fracción correcta completa.
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en finalize).
+  const REVEAL_MS = 2800;
   const [pendingLevel, setPendingLevel] = useStateG(null);
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [log, setLog] = useStateG([]);
@@ -278,7 +287,7 @@ function GameScreen({ app, setApp, go }) {
   }, []);
 
   function togglePaint(i) {
-    if (problem.type !== "frac1") return;
+    if (problem.type !== "frac1" || reveal) return;
     setPainted((prev) => {
       const next = new Set(prev);
       if (next.has(i)) next.delete(i); else next.add(i);
@@ -287,6 +296,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function pressDigit(d) {
+    if (reveal) return;
     if (problem.type === "frac2") {
       // No permitir leading zero — el slot debe mostrar "8", no "08".
       if (numAnswer === "" && d === "0") return;
@@ -308,6 +318,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function eraseLast() {
+    if (reveal) return;
     if (problem.type === "frac1") {
       setPainted(new Set());
       return;
@@ -334,6 +345,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function verify() {
+    if (reveal) return;
     let userAnswerVal, correctAnswerVal, isCorrect;
     let opLabel, aField, bField;
 
@@ -388,6 +400,25 @@ function GameScreen({ app, setApp, go }) {
 
     if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
 
+    const partialEntry = {
+      a: aField,
+      b: bField,
+      op: opLabel,
+      correctAnswer: correctAnswerVal,
+      userAnswer: userAnswerVal,
+    };
+
+    if (!isCorrect) {
+      // Revelar la fracción correcta antes del "¡UPS!". Los slots conservan
+      // lo que escribió el niño (en rojo) y aparece un cartel verde aparte.
+      setReveal({ correctSlot: correctAnswerVal });
+      setTimeout(() => { setReveal(null); finalize(false, partialEntry); }, REVEAL_MS);
+      return;
+    }
+    finalize(true, partialEntry);
+  }
+
+  function finalize(isCorrect, partialEntry) {
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
 
@@ -398,11 +429,7 @@ function GameScreen({ app, setApp, go }) {
 
     const entry = {
       idx: newAttempted,
-      a: aField,
-      b: bField,
-      op: opLabel,
-      correctAnswer: correctAnswerVal,
-      userAnswer: userAnswerVal,
+      ...partialEntry,
       isCorrect,
       time: exerciseSec,
       earned,
@@ -420,7 +447,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -460,6 +487,7 @@ function GameScreen({ app, setApp, go }) {
     setLog([]);
     setFeedback(null);
     setFeedbackMsg("");
+    setReveal(null);
     started.current = Date.now();
     exerciseStart.current = Date.now();
     setElapsed(0);
@@ -493,8 +521,19 @@ function GameScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* HUD superior */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         <div style={{
@@ -546,22 +585,6 @@ function GameScreen({ app, setApp, go }) {
             ⭐ {stars}
           </div>
         </div>
-      </div>
-
-      {/* Indicador de Ronda — centrado bajo el HUD, arriba del contenido. */}
-      <div style={{
-        position: "absolute", top: 64, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
       </div>
 
       {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
@@ -617,10 +640,10 @@ function GameScreen({ app, setApp, go }) {
       {/* ══════ ZONA CENTRAL — varía por mecánica ══════ */}
       {problem.type === "frac1" && (
         <div data-qa="zona-central" style={{
-          position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
+          position: "absolute", left: "50%", top: 80, transform: "translateX(-50%)",
           width: 540, bottom: 28,
           display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "space-around",
+          alignItems: "center",
           textAlign: "center",
         }}>
           <div style={{
@@ -632,6 +655,11 @@ function GameScreen({ app, setApp, go }) {
             {instructionText}
           </div>
 
+          <div data-qa="zona-contenido" style={{
+            flex: 1, width: "100%",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "space-evenly",
+          }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 32 }}>
             {/* Fracción objetivo apilada — referencia visual al lado de la pizza. */}
             <div style={{
@@ -662,15 +690,16 @@ function GameScreen({ app, setApp, go }) {
               </div>
             </div>
           </div>
+          </div>
         </div>
       )}
 
       {problem.type === "frac2" && (
         <div data-qa="zona-central" style={{
-          position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
+          position: "absolute", left: "50%", top: 80, transform: "translateX(-50%)",
           width: 540, bottom: 92,
           display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "space-around",
+          alignItems: "center",
           textAlign: "center",
         }}>
           <div style={{
@@ -682,6 +711,11 @@ function GameScreen({ app, setApp, go }) {
             {instructionText}
           </div>
 
+          <div data-qa="zona-contenido" style={{
+            flex: 1, width: "100%",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "space-evenly",
+          }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 22 }}>
             {/* Pizza A — fija */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
@@ -707,32 +741,50 @@ function GameScreen({ app, setApp, go }) {
                 size={185}
                 baseColor="rgba(252,233,168,0.55)"
               />
-              {/* Slot apilado: numerador arriba (dashed), barra, denominador abajo */}
-              <div style={{
-                display: "inline-flex", flexDirection: "column", alignItems: "center",
-                lineHeight: 1,
-              }}>
-                <span style={{
-                  minWidth: 50, height: 44,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  border: `2px dashed ${numAnswer ? "#2ecc8f" : "#fce9a8"}`,
-                  borderRadius: 8,
-                  padding: "0 6px",
-                  background: numAnswer ? "rgba(46,204,143,0.18)" : "rgba(252,233,168,0.08)",
-                  color: numAnswer ? "#2ecc8f" : "#fce9a8",
-                  fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 32,
+              {/* Slot apilado: numerador arriba (dashed), barra, denominador abajo.
+                  Al fallar (reveal): el slot conserva lo que escribió el niño en
+                  rojo y a la derecha aparece un cartel verde con la fracción correcta. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{
+                  display: "inline-flex", flexDirection: "column", alignItems: "center",
+                  lineHeight: 1,
                 }}>
-                  {numAnswer || "?"}
-                </span>
-                <span style={{ width: 54, height: 4, background: "#fce9a8", margin: "6px 0", borderRadius: 2 }} />
-                <span style={{
-                  fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 32,
-                  color: "#fce9a8",
-                }}>
-                  {problem.d}
-                </span>
+                  <span style={{
+                    minWidth: 50, height: 44,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    border: `2px dashed ${reveal ? "#ff6b6b" : numAnswer ? "#2ecc8f" : "#fce9a8"}`,
+                    borderRadius: 8,
+                    padding: "0 6px",
+                    background: reveal ? "rgba(255,107,107,0.18)" : numAnswer ? "rgba(46,204,143,0.18)" : "rgba(252,233,168,0.08)",
+                    color: reveal ? "#ff6b6b" : numAnswer ? "#2ecc8f" : "#fce9a8",
+                    fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 32,
+                  }}>
+                    {numAnswer || "?"}
+                  </span>
+                  <span style={{ width: 54, height: 4, background: "#fce9a8", margin: "6px 0", borderRadius: 2 }} />
+                  <span style={{
+                    fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 32,
+                    color: "#fce9a8",
+                  }}>
+                    {problem.d}
+                  </span>
+                </div>
+                {reveal && reveal.correctSlot != null && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 8,
+                    padding: "8px 16px", borderRadius: 999,
+                    background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                    color: "#eafff4", fontSize: 18, fontWeight: 800,
+                    boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+                    whiteSpace: "nowrap",
+                  }}>
+                    <span style={{ fontSize: 14, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                    ✓ {reveal.correctSlot}
+                  </span>
+                )}
               </div>
             </div>
+          </div>
           </div>
         </div>
       )}
@@ -751,10 +803,10 @@ function GameScreen({ app, setApp, go }) {
             : "DECIMAL PERIÓDICO";
         return (
           <div data-qa="zona-central" style={{
-            position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
+            position: "absolute", left: "50%", top: 80, transform: "translateX(-50%)",
             width: 540, bottom: 92,
             display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "space-around",
+            alignItems: "center",
             textAlign: "center",
           }}>
             <div>
@@ -775,6 +827,11 @@ function GameScreen({ app, setApp, go }) {
               </div>
             </div>
 
+            <div data-qa="zona-contenido" style={{
+              flex: 1, width: "100%",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "space-evenly",
+            }}>
             {/* Decimal gigante + igual + fracción objetivo, todo en una fila */}
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "center", gap: 28,
@@ -792,18 +849,36 @@ function GameScreen({ app, setApp, go }) {
                 color: "#fff",
               }}>=</span>
 
+              {/* Al fallar (reveal): los slots conservan los dígitos del niño en
+                  rojo (feedback "err") y a la derecha aparece un cartel verde
+                  con la fracción correcta completa. */}
               <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
                 <div style={{ display: "flex", gap }}>
-                  {topDigits.map((d, i) => <SlotBox key={`t${i}`} value={d} feedback={feedback} size={slotW} />)}
+                  {topDigits.map((d, i) => <SlotBox key={`t${i}`} value={d} feedback={reveal ? "err" : feedback} size={slotW} />)}
                 </div>
                 <div style={{
                   width: barW, height: 5, background: "#fff", borderRadius: 2,
                   margin: "8px 0", boxShadow: "0 0 8px rgba(255,255,255,0.4)",
                 }} />
                 <div style={{ display: "flex", gap }}>
-                  {botDigits.map((d, i) => <SlotBox key={`b${i}`} value={d} feedback={feedback} size={slotW} />)}
+                  {botDigits.map((d, i) => <SlotBox key={`b${i}`} value={d} feedback={reveal ? "err" : feedback} size={slotW} />)}
                 </div>
               </div>
+
+              {reveal && reveal.correctSlot != null && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  padding: "10px 18px", borderRadius: 999,
+                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                  color: "#eafff4", fontSize: 22, fontWeight: 800,
+                  boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+                  whiteSpace: "nowrap",
+                }}>
+                  <span style={{ fontSize: 15, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                  ✓ {reveal.correctSlot}
+                </span>
+              )}
+            </div>
             </div>
           </div>
         );

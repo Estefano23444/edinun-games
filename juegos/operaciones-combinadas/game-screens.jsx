@@ -289,6 +289,14 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca la respuesta correcta.
+  // En este juego (numpad multi-casilla) se CONSERVA lo que escribió el niño
+  // (en rojo) y aparece un cartel verde "Correcta: ✓ X" con el valor completo.
+  // { correctSlot: "<valor correcto en string con coma>" }
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El feedback "¡UPS!" es solo refuerzo emocional → corto.
+  const REVEAL_MS = 2800;
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [confirmingRestart, setConfirmingRestart] = useStateG(false);
   const [log, setLog] = useStateG([]);
@@ -321,6 +329,7 @@ function GameScreen({ app, setApp, go }) {
   // Numpad: rellena el primer slot vacío de izquierda a derecha,
   // saltando el separador de coma (que es fijo).
   function pressDigit(d) {
+    if (reveal) return;
     for (let i = 0; i < slots.length; i++) {
       if (slots[i] === "_") {
         // Sin leading zero salvo cuando la respuesta esperada empieza con 0
@@ -341,6 +350,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function eraseLast() {
+    if (reveal) return;
     for (let i = slots.length - 1; i >= 0; i--) {
       if (slots[i] !== "_" && slots[i] !== ",") {
         const next = [...slots];
@@ -353,6 +363,7 @@ function GameScreen({ app, setApp, go }) {
 
   // Verificar el paso activo. Si correcto, avanzar; si último, finalizar.
   function verify() {
+    if (reveal) return;
     const step = problem.steps[currentStepIdx];
     if (!step) return;
 
@@ -388,14 +399,24 @@ function GameScreen({ app, setApp, go }) {
     }
 
     if (userT !== step.result) {
-      // Error transitorio: feedback breve y limpiar slots editables.
-      setFeedback("err");
-      setFeedbackMsg(ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]);
+      // Antes del "¡UPS!": revelar el resultado correcto SIN tapar la pantalla
+      // con el overlay. Se CONSERVA lo que escribió el niño (los slots se
+      // pintan en rojo vía la prop de SlotBox) y al lado aparece un cartel
+      // verde "Correcta: ✓ X" con el valor completo. No se setea `feedback`
+      // aquí para que el overlay "¡UPS!" no aparezca hasta después del reveal.
+      setReveal({ correctSlot: tenthsToStr(step.result) });
       setTimeout(() => {
-        setFeedback(null);
-        setFeedbackMsg("");
-        setSlots(answerLayout(step.result));
-      }, 2600);
+        setReveal(null);
+        // Tras el revelado: feedback emocional "¡UPS!" breve, luego limpiar
+        // slots editables para reintentar (retry sin penalizar, como antes).
+        setFeedback("err");
+        setFeedbackMsg(ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)]);
+        setTimeout(() => {
+          setFeedback(null);
+          setFeedbackMsg("");
+          setSlots(answerLayout(step.result));
+        }, 1100);
+      }, REVEAL_MS);
       return;
     }
 
@@ -490,6 +511,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(0);
     setFeedback(null);
     setFeedbackMsg("");
+    setReveal(null);
     setLog([]);
     setCurrentStepIdx(0);
     setCompletedSteps([]);
@@ -513,8 +535,19 @@ function GameScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* HUD superior */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         <div style={{
@@ -543,22 +576,6 @@ function GameScreen({ app, setApp, go }) {
             ⭐ {stars}
           </div>
         </div>
-      </div>
-
-      {/* Indicador de Ronda */}
-      <div style={{
-        position: "absolute", top: 64, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
       </div>
 
       {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
@@ -611,12 +628,16 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* ══════ ZONA CENTRAL — expresión + pasos ══════ */}
+      {/* ══════ ZONA CENTRAL — enunciado fijo arriba (debajo del HUD) y el
+          contenido interactivo (expresión + pasos) centrado en el espacio
+          restante. Antes el enunciado iba dentro de un space-evenly y quedaba
+          flotando con un hueco arriba (donde antes vivía el indicador de
+          RONDA, hoy pegado al logo). ══════ */}
       <div data-qa="zona-central" style={{
-        position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
+        position: "absolute", left: "50%", top: 80, transform: "translateX(-50%)",
         width: 580, bottom: 92,
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "space-evenly",
+        alignItems: "center",
         textAlign: "center",
       }}>
         <div style={{
@@ -627,6 +648,13 @@ function GameScreen({ app, setApp, go }) {
         }}>
           {instructionText}
         </div>
+
+        {/* Contenido interactivo, centrado verticalmente en el espacio restante. */}
+        <div data-qa="zona-contenido" style={{
+          flex: 1, width: "100%",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "space-evenly",
+        }}>
 
         {/* Expresión completa al tope. */}
         <div style={{
@@ -690,12 +718,28 @@ function GameScreen({ app, setApp, go }) {
                         }}>,</span>
                       );
                     }
-                    return <SlotBox key={i} value={tok === "_" ? "" : tok} feedback={feedback} size={slotSize()} />;
+                    // Durante el reveal: pintar lo que escribió el niño en rojo.
+                    return <SlotBox key={i} value={tok === "_" ? "" : tok} feedback={reveal && reveal.correctSlot != null ? "err" : feedback} size={slotSize()} />;
                   })}
                 </div>
+                {reveal && reveal.correctSlot != null && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 8,
+                    marginLeft: 8,
+                    padding: "8px 16px", borderRadius: 999,
+                    background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                    color: "#eafff4", fontSize: 22, fontWeight: 800,
+                    boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+                    whiteSpace: "nowrap",
+                  }}>
+                    <span style={{ fontSize: 14, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                    ✓ {reveal.correctSlot}
+                  </span>
+                )}
               </div>
             );
           })()}
+        </div>
         </div>
       </div>
 

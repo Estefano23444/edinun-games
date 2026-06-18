@@ -962,6 +962,14 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca la respuesta correcta.
+  // Como esta mecánica es numpad/respuesta escrita, el slot CONSERVA lo que
+  // escribió el niño (en rojo) y aparece un cartel verde aparte con el valor
+  // correcto de cada hueco: { correctVals: [n, ...] }.
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura más.
+  // El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait` en verify).
+  const REVEAL_MS = 2800;
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [log, setLog] = useStateG([]);
 
@@ -989,6 +997,7 @@ function GameScreen({ app, setApp, go }) {
   }, []);
 
   function pressDigit(d) {
+    if (reveal) return;
     // Buscar el primer slot vacío en orden de huecos (izq→der).
     for (let bi = 0; bi < blankInputs.length; bi++) {
       const slot = blankInputs[bi];
@@ -1005,6 +1014,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function eraseLast() {
+    if (reveal) return;
     // Borra el último dígito ingresado (último blank, posición de la derecha).
     for (let bi = blankInputs.length - 1; bi >= 0; bi--) {
       const slot = blankInputs[bi];
@@ -1020,6 +1030,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function verify() {
+    if (reveal) return;
     // Todos los slots de todos los huecos deben estar llenos.
     const allFilled = blankInputs.length > 0 && blankInputs.every((slot) => slot.length > 0 && slot.every((x) => x !== ""));
     if (!allFilled) {
@@ -1032,15 +1043,29 @@ function GameScreen({ app, setApp, go }) {
     // Comparar cada hueco con el término correcto.
     let isCorrect = true;
     const userVals = [];
+    const correctVals = [];
     for (let bi = 0; bi < blankInputs.length; bi++) {
       const userVal = parseInt(blankInputs[bi].join(""), 10);
       userVals.push(userVal);
       const correctVal = problem.terms[problem.blanks[bi]];
+      correctVals.push(correctVal);
       if (userVal !== correctVal) isCorrect = false;
     }
 
     if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
 
+    // Al fallar: revelar la respuesta correcta ANTES del "¡UPS!".
+    // El slot conserva lo que escribió el niño (en rojo) y aparece un cartel
+    // verde con los valores correctos. Bloquea inputs durante el revelado.
+    if (!isCorrect) {
+      setReveal({ correctVals });
+      setTimeout(() => { setReveal(null); finalize(userVals, false); }, REVEAL_MS);
+      return;
+    }
+    finalize(userVals, true);
+  }
+
+  function finalize(userVals, isCorrect) {
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
 
@@ -1083,7 +1108,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -1157,8 +1182,19 @@ function GameScreen({ app, setApp, go }) {
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       {/* HUD superior — sin tabs de nivel (juego de nivel único). */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         {/* Centro: catLabel discreto en lugar de tabs */}
@@ -1188,22 +1224,6 @@ function GameScreen({ app, setApp, go }) {
             ⭐ {stars}
           </div>
         </div>
-      </div>
-
-      {/* Indicador de Ronda — centrado bajo el HUD. */}
-      <div style={{
-        position: "absolute", top: 64, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
       </div>
 
       {/* Personaje + bocadillo agrupados: el bocadillo se ancla sobre la
@@ -1256,12 +1276,15 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* ══════ ZONA CENTRAL — secuencia con huecos ══════ */}
+      {/* ══════ ZONA CENTRAL — enunciado fijo arriba (debajo del HUD) y la
+          secuencia interactiva centrada en el espacio restante. Antes el
+          enunciado iba dentro de un space-evenly y quedaba flotando con un
+          hueco arriba (donde antes vivía el indicador de RONDA). ══════ */}
       <div data-qa="zona-central" style={{
-        position: "absolute", left: "50%", top: 100, transform: "translateX(-50%)",
+        position: "absolute", left: "50%", top: 80, transform: "translateX(-50%)",
         width: 580, bottom: 92,
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "space-evenly",
+        alignItems: "center",
         textAlign: "center",
       }}>
         <div>
@@ -1281,6 +1304,13 @@ function GameScreen({ app, setApp, go }) {
             {tipoLabel}
           </div>
         </div>
+
+        {/* Contenido interactivo centrado verticalmente en el espacio restante. */}
+        <div data-qa="zona-contenido" style={{
+          flex: 1, width: "100%",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "space-evenly",
+        }}>
 
         {/* Secuencia — términos separados por comas para diferenciarlos. */}
         <div style={{
@@ -1306,10 +1336,13 @@ function GameScreen({ app, setApp, go }) {
               const slots = blankInputs[blankIdx] || [];
               const slotsLen = slots.length || String(problem.terms[i]).length;
               const ss = slotSize(slotsLen);
+              // Durante el revelado, el slot conserva lo que escribió el niño
+              // pero se marca en rojo (la respuesta correcta va aparte, abajo).
+              const slotFeedback = reveal && reveal.correctVals ? "err" : feedback;
               return (
                 <div style={{ display: "flex", gap: 4 }}>
                   {Array.from({ length: slotsLen }).map((_, j) => (
-                    <SlotBox key={j} value={slots[j] || ""} feedback={feedback} size={ss} />
+                    <SlotBox key={j} value={slots[j] || ""} feedback={slotFeedback} size={ss} />
                   ))}
                 </div>
               );
@@ -1329,6 +1362,27 @@ function GameScreen({ app, setApp, go }) {
               </React.Fragment>
             );
           })}
+        </div>
+
+        {/* Revelado: cartel verde con la(s) respuesta(s) correcta(s) antes del
+            "¡UPS!". El slot conserva lo que escribió el niño (en rojo) y aquí
+            se muestra el valor correcto, sin sobrescribir su intento. */}
+        {reveal && reveal.correctVals && (
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 10,
+            padding: "8px 18px", borderRadius: 999,
+            background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+            color: "#eafff4", fontSize: 20, fontWeight: 800,
+            fontFamily: "var(--ed-font-display)",
+            boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+            whiteSpace: "nowrap",
+          }}>
+            <span style={{ fontSize: 13, color: "#bff5df", letterSpacing: "0.03em", textTransform: "uppercase" }}>
+              {reveal.correctVals.length > 1 ? "Correctas:" : "Correcta:"}
+            </span>
+            ✓ {reveal.correctVals.join(", ")}
+          </div>
+        )}
         </div>
       </div>
 

@@ -919,7 +919,7 @@ const ENCOURAGEMENTS = [
 //   - resaltados en los ejes — los valores de A en X y de B en Y se
 //     pintan con un color más fuerte para guiar visualmente.
 // ─────────────────────────────────────────────────────────────
-function CartesianBoard({ target, marked, toggleMark, highlightA, highlightB, feedback, step = SIZE.coords.step, axisPad = SIZE.coords.axisPad, tipPad = SIZE.coords.tipPad }) {
+function CartesianBoard({ target, marked, toggleMark, highlightA, highlightB, feedback, revealKeys = null, step = SIZE.coords.step, axisPad = SIZE.coords.axisPad, tipPad = SIZE.coords.tipPad }) {
   const STEP = step;
   const AXIS_PAD = axisPad;
   const TIP_PAD  = tipPad;
@@ -1091,6 +1091,30 @@ function CartesianBoard({ target, marked, toggleMark, highlightA, highlightB, fe
           </div>
         );
       })}
+
+      {/* Revelado (modo producto): los pares correctos en verde con ✓, para
+          que el niño vea dónde debían ir las marcas antes del "¡UPS!". Sus
+          propias marcas (rojas, vía feedback "err") quedan visibles debajo. */}
+      {revealKeys && [...revealKeys].map((key) => {
+        const [xs, ys] = key.split(",");
+        const x = parseInt(xs, 10);
+        const y = parseInt(ys, 10);
+        return (
+          <div key={`reveal-${key}`} style={{
+            position: "absolute",
+            left: cellLeft(x) - 13,
+            top:  cellTop(y) - 13,
+            width: 26, height: 26, borderRadius: "50%",
+            background: "radial-gradient(circle at 30% 30%, #b9ffd2, #1e8a5d)",
+            border: "2px solid #2ecc8f",
+            boxShadow: "0 0 14px rgba(46,204,143,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#06281c", fontSize: 14, fontWeight: 900,
+            pointerEvents: "none",
+            zIndex: 5,
+          }}>✓</div>
+        );
+      })}
     </div>
   );
 }
@@ -1116,6 +1140,17 @@ function GameScreen({ app, setApp, go }) {
   const [starsSession, setStarsSession] = useStateG(0);
   const [feedback, setFeedback] = useStateG(null);
   const [feedbackMsg, setFeedbackMsg] = useStateG("");
+  // Fase "reveal": antes del overlay "¡UPS!" se marca la respuesta correcta.
+  // coords   → { correct: "(x, y)" } → el slot conserva lo que el niño
+  //            escribió (en rojo) y aparece un cartel verde con la coordenada
+  //            correcta.
+  // producto → { correct: "((a,b), ...)", keys: Set } → las marcas del niño
+  //            quedan en rojo (feedback "err") y aparece un cartel verde con
+  //            los pares correctos.
+  const [reveal, setReveal] = useStateG(null);
+  // El revelado (respuesta correcta marcada) es el momento educativo → dura
+  // más. El overlay "¡UPS!" es solo refuerzo emocional → corto (ver `wait`).
+  const REVEAL_MS = 2800;
   const [confirmingExit, setConfirmingExit] = useStateG(false);
   const [pendingLevel, setPendingLevel] = useStateG(null);
   const [log, setLog] = useStateG([]);
@@ -1133,6 +1168,7 @@ function GameScreen({ app, setApp, go }) {
 
   // press(d) — coords: rellena de izquierda a derecha (X primero).
   function press(d) {
+    if (reveal) return;
     if (problem.mode !== "coords") return;
     setAnswer((prev) => {
       const next = [...prev];
@@ -1144,6 +1180,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function eraseAt(i) {
+    if (reveal) return;
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < slots) next.push(undefined);
@@ -1152,6 +1189,7 @@ function GameScreen({ app, setApp, go }) {
     });
   }
   function erase() {
+    if (reveal) return;
     if (problem.mode === "coords") {
       setAnswer((prev) => {
         const next = [...prev];
@@ -1169,6 +1207,7 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function toggleMark(x, y) {
+    if (reveal) return;
     setMarked((prev) => {
       const next = new Set(prev);
       const key = `${x},${y}`;
@@ -1179,7 +1218,10 @@ function GameScreen({ app, setApp, go }) {
   }
 
   function verify() {
+    if (reveal) return;
     let isCorrect, userAnswerStr, correctAnswerStr;
+    // Set de claves correctas (modo producto) para el revelado.
+    let correctKeys = null;
 
     if (problem.mode === "coords") {
       const filled = [answer[0], answer[1]];
@@ -1203,6 +1245,7 @@ function GameScreen({ app, setApp, go }) {
         return;
       }
       const correct = new Set(problem.pares.map(p => `${p.x},${p.y}`));
+      correctKeys = correct;
       isCorrect = marked.size === correct.size && [...marked].every(k => correct.has(k));
       const sortKeys = (set) => [...set].sort().map(k => {
         const [x, y] = k.split(",");
@@ -1217,6 +1260,34 @@ function GameScreen({ app, setApp, go }) {
 
     if (typeof window.markFirstAttempt === "function") window.markFirstAttempt();
 
+    const entry = {
+      mode: problem.mode,
+      a: problem.mode === "coords" ? problem.x : `(${problem.A.join(", ")})`,
+      b: problem.mode === "coords" ? problem.y : `(${problem.B.join(", ")})`,
+      op: problem.mode === "coords" ? "→" : "×",
+      correctAnswer: correctAnswerStr,
+      userAnswer: userAnswerStr,
+    };
+
+    if (!isCorrect) {
+      // Mostrar la respuesta correcta antes del "¡UPS!". El input del niño
+      // se conserva (queda en rojo vía feedback "err") y aparece un cartel
+      // verde con la coordenada / los pares correctos.
+      setReveal({ correct: correctAnswerStr, keys: correctKeys });
+      // OJO: no tocar `feedback` aquí — el overlay "¡UPS!" se dispara con
+      // `feedback` truthy. Durante el revelado los slots/marcas del niño se
+      // tiñen de rojo consultando `reveal` directamente (ver render). El
+      // "¡UPS!" llega recién en finalize.
+      setTimeout(() => {
+        setReveal(null);
+        finalize(false, entry);
+      }, REVEAL_MS);
+      return;
+    }
+    finalize(true, entry);
+  }
+
+  function finalize(isCorrect, partialEntry) {
     const exerciseSec = Math.max(0, Math.floor((Date.now() - exerciseStart.current) / 1000));
     const earned = isCorrect ? Math.max(1, 10 - Math.floor(exerciseSec / 3)) : 0;
 
@@ -1227,12 +1298,7 @@ function GameScreen({ app, setApp, go }) {
 
     const entry = {
       idx: newAttempted,
-      mode: problem.mode,
-      a: problem.mode === "coords" ? problem.x : `(${problem.A.join(", ")})`,
-      b: problem.mode === "coords" ? problem.y : `(${problem.B.join(", ")})`,
-      op: problem.mode === "coords" ? "→" : "×",
-      correctAnswer: correctAnswerStr,
-      userAnswer: userAnswerStr,
+      ...partialEntry,
       isCorrect,
       time: exerciseSec,
       earned,
@@ -1249,7 +1315,7 @@ function GameScreen({ app, setApp, go }) {
     setStarsSession(newStarsSession);
     setLog(newLog);
 
-    const wait = isCorrect ? 950 : 2600;
+    const wait = isCorrect ? 950 : 1100;
     setTimeout(() => {
       setFeedback(null);
       setFeedbackMsg("");
@@ -1293,6 +1359,7 @@ function GameScreen({ app, setApp, go }) {
     setLog([]);
     setFeedback(null);
     setFeedbackMsg("");
+    setReveal(null);
     started.current = Date.now();
     exerciseStart.current = Date.now();
     setElapsed(0);
@@ -1317,8 +1384,19 @@ function GameScreen({ app, setApp, go }) {
 
       {/* Top HUD — 2 tabs (basic / medium). */}
       <div data-qa="hud" style={{ position: "absolute", top: 10, left: 16, right: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <EdinunLogoMini size={64} />
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>RONDA</span>
+            {[0,1,2].map((i) => (
+              <div key={i} style={{
+                width: 10, height: 10, borderRadius: "50%",
+                background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
+                boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
+                color: i < solved ? "#fce9a8" : "#ff6b6b",
+              }} />
+            ))}
+          </div>
         </div>
 
         <div style={{
@@ -1425,26 +1503,10 @@ function GameScreen({ app, setApp, go }) {
         }}>{char.name}</div>
       </div>
 
-      {/* Racha / progreso */}
-      <div style={{
-        position: "absolute", top: 70, left: "50%", transform: "translateX(-50%)",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <span className="ed-label" style={{ color: "rgba(255,255,255,0.7)" }}>Ronda</span>
-        {[0,1,2].map((i) => (
-          <div key={i} style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: i < attempted ? (i < solved ? "#fce9a8" : "#ff6b6b") : "rgba(255,255,255,0.2)",
-            boxShadow: i < attempted ? "0 0 10px currentColor" : "none",
-            color: i < solved ? "#fce9a8" : "#ff6b6b",
-          }} />
-        ))}
-      </div>
-
       {/* Instrucción del ejercicio. En modo "producto" agregamos los
           conjuntos A y B para que el estudiante sepa qué marcar. */}
       <div style={{
-        position: "absolute", top: 92, left: "50%", transform: "translateX(-50%)",
+        position: "absolute", top: 80, left: "50%", transform: "translateX(-50%)",
         fontFamily: "var(--ed-font-display)", fontWeight: 700,
         fontSize: 18, lineHeight: 1.2,
         color: "#fff",
@@ -1464,17 +1526,21 @@ function GameScreen({ app, setApp, go }) {
       </div>
 
       {/* Plano cartesiano — posición y tamaño según el modo:
-          coords   → top fijo (118), rejilla compacta (step 36); deja
-                     margen abajo para la bandeja con slots + numpad.
+          coords   → top fijo (110, justo bajo el enunciado que ahora vive
+                     en top 80); rejilla compacta (step 36); deja margen
+                     abajo para la bandeja con slots + numpad.
           producto → centrado verticalmente (translate(-50%, -50%), top
-                     322 para repartir el aire bajo el enunciado y dejar
+                     314 para repartir el aire bajo el enunciado y dejar
                      un margen inferior parejo), rejilla más grande
                      (step 50); aprovecha el espacio porque no hay
-                     bandeja inferior. */}
+                     bandeja inferior. El enunciado subió a top 80 (antes
+                     92): el indicador de RONDA ya vive pegado al logo, así
+                     que el contenido sube para cerrar el hueco que quedaba
+                     encima del enunciado. */}
       <div data-qa="zona-central" style={
         problem.mode === "coords"
-          ? { position: "absolute", top: 118, left: "50%", transform: "translateX(-50%)", textAlign: "center" }
-          : { position: "absolute", top: 322, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }
+          ? { position: "absolute", top: 110, left: "50%", transform: "translateX(-50%)", textAlign: "center" }
+          : { position: "absolute", top: 314, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" }
       }>
         <CartesianBoard
           target={problem.mode === "coords" ? { x: problem.x, y: problem.y } : null}
@@ -1482,12 +1548,38 @@ function GameScreen({ app, setApp, go }) {
           toggleMark={problem.mode === "producto" ? toggleMark : null}
           highlightA={problem.mode === "producto" ? problem.A : null}
           highlightB={problem.mode === "producto" ? problem.B : null}
-          feedback={feedback}
+          feedback={reveal ? "err" : feedback}
+          revealKeys={problem.mode === "producto" && reveal ? reveal.keys : null}
           step={SIZE[problem.mode].step}
           axisPad={SIZE[problem.mode].axisPad}
           tipPad={SIZE[problem.mode].tipPad}
         />
       </div>
+
+      {/* Cartel verde "Correcta" durante el revelado. NO sobrescribe la
+          respuesta del niño (sus slots/marcas quedan en rojo); muestra el
+          valor correcto aparte. coords → encima de la bandeja; producto →
+          bajo el plano. */}
+      {reveal && (
+        <div style={
+          problem.mode === "coords"
+            ? { position: "absolute", bottom: 156, left: "50%", transform: "translateX(-50%)" }
+            : { position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)" }
+        }>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: "8px 18px", borderRadius: 999,
+            background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+            color: "#eafff4", fontSize: 18, fontWeight: 800,
+            fontFamily: "var(--ed-font-display)",
+            boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+            whiteSpace: "nowrap",
+          }}>
+            <span style={{ fontSize: 14, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+            ✓ {reveal.correct}
+          </span>
+        </div>
+      )}
 
       {/* Slots de respuesta + numpad — solo en modo coords. */}
       {problem.mode === "coords" && (
@@ -1507,6 +1599,9 @@ function GameScreen({ app, setApp, go }) {
               const d = answer[i];
               const filled = d !== undefined && d !== "";
               const isActive = i === activeIdx;
+              // Durante el revelado (reveal) el input del niño se conserva
+              // pero se tiñe de rojo, igual que cuando feedback === "err".
+              const errTint = feedback === "err" || reveal;
               return (
                 <React.Fragment key={i}>
                   <div
@@ -1515,13 +1610,13 @@ function GameScreen({ app, setApp, go }) {
                     title={filled ? "Toca para borrar" : (i === 0 ? "X" : "Y")}
                     style={{
                       width: 50, height: 50, fontSize: 28,
-                      borderColor: feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
+                      borderColor: feedback === "ok" ? "#2ecc8f" : errTint ? "#ff6b6b" : undefined,
                       boxShadow: feedback === "ok"
                         ? "0 0 14px rgba(46,204,143,0.65)"
-                        : feedback === "err"
+                        : errTint
                           ? "0 0 14px rgba(255,107,107,0.65)"
                           : undefined,
-                      color: "#fff",
+                      color: errTint ? "#ffe3e3" : "#fff",
                       cursor: filled ? "pointer" : "default",
                     }}
                   >
