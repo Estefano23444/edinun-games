@@ -66,7 +66,7 @@ Cada juego muestra un contador de visitas global. El patrón de referencia vive 
 - **Probar el contador real localmente:** `php -S localhost:8000` desde la carpeta del juego (no `python -m http.server`, que sirve el `.php` como texto).
 - **`visits.txt` está gitignoreado** (`juegos/*/visits.txt`); nunca commitearlo.
 
-**Estado actual:** solo JUEGO-5 tiene `counter.php`. El rollout a los 13 juegos restantes y al template de la skill está redactado pero pendiente en [`.prompts/rollout-contador-juegos-restantes.md`](.prompts/rollout-contador-juegos-restantes.md) — al hacerlo, usar la versión **endurecida** de JUEGO-5 (visits.txt same-dir), no la original con `counts/`. `counter.php` es **idéntico byte a byte** entre juegos — no se personaliza.
+**Estado actual:** rollout **completo** — los 14 juegos tienen `counter.php` (los 12 `JUEGO-N` + los 2 legacy `operaciones-basicas` y `operaciones-combinadas`), todos **idénticos byte a byte** (versión endurecida de JUEGO-5, `visits.txt` same-dir, sin `counts/`), y los 14 `screens.jsx` ya cablean `useVisitorCount`. `counter.php` no se personaliza por juego. Al crear un juego nuevo, copiar el `counter.php` de cualquier juego existente tal cual.
 
 ## Deploy a producción
 
