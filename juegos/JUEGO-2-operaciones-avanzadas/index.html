@@ -502,7 +502,7 @@ function HomeScreen({ app, setApp, go }) {
               botón grande de color es más concreto que escribir un nombre. */}
           <div>
             <div className="ed-label" style={{ marginBottom: 10 }}>
-              Selecciona un nivel para jugar
+              Selecciona un tema para jugar
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
               {[
@@ -1078,6 +1078,12 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
   let activeIdx = -1;
   if (slotsSpec.signSlot && (answer[0] === undefined || answer[0] === "")) {
     activeIdx = 0;
+  } else if (problem.mode === "ints") {
+    // ints: el número se ingresa de izquierda a derecha (centena → decena → unidad),
+    // como se escribe un número, después del signo.
+    for (let k = firstDigitIdx; k < slots; k++) {
+      if (answer[k] === undefined || answer[k] === "") { activeIdx = k; break; }
+    }
   } else {
     for (let k = slots - 1; k >= firstDigitIdx; k--) {
       if (answer[k] === undefined || answer[k] === "") { activeIdx = k; break; }
@@ -1096,7 +1102,7 @@ function EquationCanvas({ problem, answer, slots, slotsSpec, firstDigitIdx, feed
   //              sola línea; el ancla se bajó a 280 para acompañar el
   //              enunciado más alto sin chocar el numpad.
   const wrapperBase = problem.mode === "vert"
-    ? { position: "absolute", top: 118, bottom: 92, left: "50%", transform: "translateX(-50%)", textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" }
+    ? { position: "absolute", top: 158, bottom: 92, left: "50%", transform: "translateX(-50%)", textAlign: "center", display: "flex", flexDirection: "column", justifyContent: "center" }
     : { position: "absolute", top: 280, left: "50%", transform: "translate(-50%, -50%)", textAlign: "center" };
   const numberStyle = {
     fontFamily: "var(--ed-font-display)", fontWeight: 700,
@@ -1379,7 +1385,15 @@ function GameScreen({ app, setApp, go }) {
       if (slotsSpec.signSlot && (next[0] === undefined || next[0] === "")) {
         return prev;
       }
-      // Llenar de derecha a izquierda solo los slots de dígitos.
+      // Modo ints: el número se ingresa de IZQUIERDA A DERECHA (centena →
+      // decena → unidad), como se escribe; los demás modos llenan de derecha
+      // a izquierda (unidades primero, estilo cálculo manual).
+      if (problem.mode === "ints") {
+        for (let i = firstDigitIdx; i < slots; i++) {
+          if (next[i] === undefined) { next[i] = d; return next; }
+        }
+        return prev;
+      }
       for (let i = slots - 1; i >= firstDigitIdx; i--) {
         if (next[i] === undefined) { next[i] = d; return next; }
       }
@@ -1397,12 +1411,21 @@ function GameScreen({ app, setApp, go }) {
   }
   function erase() {
     if (reveal) return; // bloquea borrado durante el revelado
-    // Borra el último valor colocado (el más a la izquierda entre los llenos).
-    // Incluye el slot de signo si existe — el orden visual coincide con el
-    // orden de inserción (signo primero, dígitos de derecha a izquierda).
     setAnswer((prev) => {
       const next = [...prev];
       while (next.length < slots) next.push(undefined);
+      if (problem.mode === "ints") {
+        // ints: el número se escribe izq→der tras el signo, así que el último
+        // colocado es el dígito más a la DERECHA lleno. Solo cuando ya no quedan
+        // dígitos se borra el signo.
+        for (let i = slots - 1; i >= firstDigitIdx; i--) {
+          if (next[i] !== undefined) { next[i] = undefined; return next; }
+        }
+        if (next[0] !== undefined) { next[0] = undefined; return next; }
+        return next;
+      }
+      // Otros modos (dígitos de derecha a izquierda): el último colocado es el
+      // dígito más a la izquierda lleno.
       for (let i = 0; i < slots; i++) {
         if (next[i] !== undefined) { next[i] = undefined; return next; }
       }
@@ -1737,7 +1760,7 @@ function GameScreen({ app, setApp, go }) {
           position: "absolute", top: 116, left: "50%", transform: "translateX(-50%)",
           display: "inline-flex", alignItems: "center", gap: 10,
           padding: "10px 20px", borderRadius: 999,
-          background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+          background: "rgba(11,54,41,0.98)", border: "2px solid #2ecc8f",
           color: "#eafff4", fontSize: 22, fontWeight: 800,
           fontFamily: "var(--ed-font-display)",
           boxShadow: "0 0 16px rgba(46,204,143,0.5)",

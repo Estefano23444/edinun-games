@@ -344,6 +344,16 @@ function GameScreen({ app, setApp, go }) {
     }
   }
 
+  // REINICIAR — borra TODO lo ingresado (a diferencia de BORRAR, que quita
+  // solo el último). Disponible en los tres modos.
+  function clearAll() {
+    if (reveal) return;
+    if (problem.type === "frac1") { setPainted(new Set()); return; }
+    if (problem.type === "frac2") { setNumAnswer(""); return; }
+    setTopDigits((prev) => prev.map(() => ""));
+    setBotDigits((prev) => prev.map(() => ""));
+  }
+
   function verify() {
     if (reveal) return;
     let userAnswerVal, correctAnswerVal, isCorrect;
@@ -677,16 +687,20 @@ function GameScreen({ app, setApp, go }) {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
               <Pizza
                 denom={problem.denom}
-                painted={painted}
-                onSlice={togglePaint}
+                painted={reveal ? problem.num : painted}
+                onSlice={reveal ? undefined : togglePaint}
                 size={300}
+                baseColor={reveal ? "#2ecc8f" : "#f2c260"}
               />
               <div style={{
                 marginTop: 10,
                 fontFamily: "var(--ed-font-mono)", fontSize: 14,
-                color: "rgba(255,255,255,0.7)",
+                color: reveal ? "#7CF5C0" : "rgba(255,255,255,0.7)",
+                fontWeight: reveal ? 700 : 400,
               }}>
-                Pintadas: {painted.size} / {problem.denom}
+                {reveal
+                  ? `Respuesta: ${problem.num} / ${problem.denom}`
+                  : `Pintadas: ${painted.size} / ${problem.denom}`}
               </div>
             </div>
           </div>
@@ -719,7 +733,7 @@ function GameScreen({ app, setApp, go }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 22 }}>
             {/* Pizza A — fija */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-              <Pizza denom={problem.b} painted={problem.a} size={185} baseColor="#f2c260" />
+              <Pizza denom={problem.b} painted={problem.a} size={165} baseColor="#f2c260" />
               <div style={{
                 fontFamily: "var(--ed-font-display)", fontWeight: 700, fontSize: 36,
                 color: "#fce9a8", lineHeight: 1,
@@ -737,9 +751,9 @@ function GameScreen({ app, setApp, go }) {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <Pizza
                 denom={problem.d}
-                painted={numAnswer === "" ? 0 : Math.min(parseInt(numAnswer, 10) || 0, problem.d)}
-                size={185}
-                baseColor="rgba(252,233,168,0.55)"
+                painted={reveal ? problem.cAns : (numAnswer === "" ? 0 : Math.min(parseInt(numAnswer, 10) || 0, problem.d))}
+                size={165}
+                baseColor={reveal ? "#2ecc8f" : "rgba(252,233,168,0.55)"}
               />
               {/* Slot apilado: numerador arriba (dashed), barra, denominador abajo.
                   Al fallar (reveal): el slot conserva lo que escribió el niño en
@@ -773,7 +787,7 @@ function GameScreen({ app, setApp, go }) {
                   <span style={{
                     display: "inline-flex", alignItems: "center", gap: 8,
                     padding: "8px 16px", borderRadius: 999,
-                    background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+                    background: "rgba(11,54,41,0.98)", border: "2px solid #2ecc8f",
                     color: "#eafff4", fontSize: 18, fontWeight: 800,
                     boxShadow: "0 0 16px rgba(46,204,143,0.5)",
                     whiteSpace: "nowrap",
@@ -796,6 +810,10 @@ function GameScreen({ app, setApp, go }) {
         const slotW = 64;
         const gap = 6;
         const barW = maxLen * slotW + Math.max(0, maxLen - 1) * gap + 8;
+        // El decimal puede ser largo (periódico, "0,888..."). Escalamos su
+        // tamaño para que su ancho no supere al de un decimal corto a 110px y
+        // así NO invada el bocadillo del personaje a la izquierda.
+        const decFontSize = Math.min(110, Math.floor(440 / problem.decStr.length));
         const tipo = problem.idx === 0
           ? "DECIMAL EXACTO · UNA CIFRA"
           : problem.idx === 1
@@ -838,7 +856,7 @@ function GameScreen({ app, setApp, go }) {
             }}>
               <div style={{
                 fontFamily: "var(--ed-font-display)", fontWeight: 700,
-                fontSize: 110, lineHeight: 1, color: "#fce9a8",
+                fontSize: decFontSize, lineHeight: 1, color: "#fce9a8",
                 textShadow: "0 0 18px rgba(252,233,168,0.45), 0 3px 0 rgba(0,0,0,0.35)",
               }}>
                 {problem.decStr}
@@ -865,20 +883,24 @@ function GameScreen({ app, setApp, go }) {
                 </div>
               </div>
 
-              {reveal && reveal.correctSlot != null && (
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  padding: "10px 18px", borderRadius: 999,
-                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
-                  color: "#eafff4", fontSize: 22, fontWeight: 800,
-                  boxShadow: "0 0 16px rgba(46,204,143,0.5)",
-                  whiteSpace: "nowrap",
-                }}>
-                  <span style={{ fontSize: 15, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
-                  ✓ {reveal.correctSlot}
-                </span>
-              )}
             </div>
+
+            {/* Cartel de respuesta correcta — DEBAJO de la fila (no a la
+                derecha) para no montarse sobre los botones cuando el decimal
+                gigante ensancha la fila. */}
+            {reveal && reveal.correctSlot != null && (
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "10px 18px", borderRadius: 999,
+                background: "rgba(11,54,41,0.98)", border: "2px solid #2ecc8f",
+                color: "#eafff4", fontSize: 22, fontWeight: 800,
+                boxShadow: "0 0 16px rgba(46,204,143,0.5)",
+                whiteSpace: "nowrap",
+              }}>
+                <span style={{ fontSize: 15, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
+                ✓ {reveal.correctSlot}
+              </div>
+            )}
             </div>
           </div>
         );
@@ -924,12 +946,21 @@ function GameScreen({ app, setApp, go }) {
         >
           ¡VERIFICAR!
         </button>
+        {problem.type !== "frac1" && (
+          <button
+            className="ed-btn ed-btn-erase"
+            onClick={eraseLast}
+            style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
+          >
+            BORRAR
+          </button>
+        )}
         <button
-          className="ed-btn ed-btn-erase"
-          onClick={eraseLast}
+          className="ed-btn ed-btn-primary"
+          onClick={clearAll}
           style={{ fontSize: 15, padding: "0 10px", height: 56, fontWeight: 800, letterSpacing: "0.04em" }}
         >
-          BORRAR
+          REINICIAR
         </button>
         <button
           className="ed-btn ed-btn-ghost"

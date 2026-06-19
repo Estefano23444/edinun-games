@@ -227,7 +227,7 @@ function CartesianGrid({ problem, avatar, char, feedback, errorCell, reveal }) {
           top:  cellTop(reveal.y) - 20,
           width: 40, height: 40, borderRadius: "50%",
           border: "3px solid #2ecc8f",
-          background: "rgba(46,204,143,0.25)",
+          background: "rgba(11,54,41,0.98)",
           boxShadow: "0 0 16px rgba(46,204,143,0.7)",
           pointerEvents: "none",
           zIndex: 6,
@@ -608,6 +608,21 @@ function GameScreen({ app, setApp, go }) {
         position: "absolute", right: 18, top: "50%", transform: "translateY(-50%)",
         display: "flex", flexDirection: "column", gap: 12, width: 150,
       }}>
+        {/* Indicador en vivo de la posición actual del avatar — contrasta con
+            el objetivo del enunciado para que el niño sepa siempre dónde está
+            (sobre todo al fallar). Se actualiza con cada movimiento. */}
+        <div style={{
+          background: "rgba(10,6,35,0.55)",
+          border: "2px solid rgba(79,216,255,0.6)",
+          borderRadius: 14, padding: "7px 10px", textAlign: "center",
+          fontFamily: "var(--ed-font-display)", fontWeight: 800,
+          boxShadow: "0 0 14px rgba(79,216,255,0.25)",
+        }}>
+          <div style={{ fontSize: 11, letterSpacing: "0.09em", color: "rgba(191,245,223,0.85)", marginBottom: 2 }}>ESTÁS EN</div>
+          <div style={{ fontSize: 22, color: "#fff", lineHeight: 1 }}>
+            (<span style={{ color: "#4fd8ff" }}>{avatar.x}</span>, <span style={{ color: "#4fd8ff" }}>{avatar.y}</span>)
+          </div>
+        </div>
         <button
           className="ed-btn ed-btn-verify"
           onClick={verify}

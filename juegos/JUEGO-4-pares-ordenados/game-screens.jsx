@@ -675,10 +675,11 @@ function GameScreen({ app, setApp, go }) {
           <span>📍 ¿Cuál es la coordenada del punto?</span>
         ) : (
           <span>
-            ✖️ Marca todos los pares de
-            <span style={{ color: "#fce9a8", marginLeft: 8 }}>A = {`(${problem.A.join(", ")})`}</span>
-            <span style={{ color: "#fff", margin: "0 6px" }}>×</span>
-            <span style={{ color: "#fce9a8" }}>B = {`(${problem.B.join(", ")})`}</span>
+            Toca las coordenadas del producto cartesiano{" "}
+            <span style={{ color: "#fce9a8" }}>A({problem.A.join(", ")})</span>
+            <span style={{ color: "#fff", margin: "0 4px" }}>×</span>
+            <span style={{ color: "#fce9a8" }}>B({problem.B.join(", ")})</span>
+            <span style={{ color: "#fff" }}>.</span>
           </span>
         )}
       </div>
@@ -721,13 +722,13 @@ function GameScreen({ app, setApp, go }) {
       {reveal && (
         <div style={
           problem.mode === "coords"
-            ? { position: "absolute", bottom: 156, left: "50%", transform: "translateX(-50%)" }
-            : { position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)" }
+            ? { position: "absolute", bottom: 156, left: "50%", transform: "translateX(-50%)", zIndex: 5 }
+            : { position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 5 }
         }>
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 8,
             padding: "8px 18px", borderRadius: 999,
-            background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+            background: "rgba(11,54,41,0.98)", border: "2px solid #2ecc8f",
             color: "#eafff4", fontSize: 18, fontWeight: 800,
             fontFamily: "var(--ed-font-display)",
             boxShadow: "0 0 16px rgba(46,204,143,0.5)",

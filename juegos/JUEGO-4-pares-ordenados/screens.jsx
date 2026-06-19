@@ -262,7 +262,7 @@ function HomeScreen({ app, setApp, go }) {
               coherencia visual con el resto del repo. */}
           <div>
             <div className="ed-label" style={{ marginBottom: 10 }}>
-              Selecciona un nivel para jugar
+              Selecciona un tema para jugar
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {[

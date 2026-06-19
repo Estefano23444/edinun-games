@@ -174,7 +174,7 @@ function UnitsTable() {
     <div style={{
       display: "grid",
       gridTemplateColumns: `repeat(${UNITS.length}, 1fr)`,
-      width: 480,
+      width: 392,
       borderRadius: 12,
       overflow: "hidden",
       border: "2px solid rgba(252,233,168,0.65)",
@@ -186,7 +186,7 @@ function UnitsTable() {
           background: "rgba(252,233,168,0.12)",
           borderRight: i < UNITS.length - 1 ? "2px solid rgba(252,233,168,0.65)" : "none",
           fontFamily: "var(--ed-font-display)", fontWeight: 700,
-          fontSize: 22, color: "#fce9a8",
+          fontSize: 19, color: "#fce9a8",
           textAlign: "center",
           textShadow: "0 0 10px rgba(252,233,168,0.35)",
           letterSpacing: "0.02em",
@@ -374,7 +374,7 @@ function GameScreen({ app, setApp, go }) {
     return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   }
 
-  const bocadilloText = "Convierte la masa a la unidad pedida.";
+  const bocadilloText = "Completa la conversión con el número correcto.";
   const instructionText = "⚖️ ¡Equilibra la balanza!";
 
   // Tile width / fontSize según largo del valor visible.
@@ -552,7 +552,12 @@ function GameScreen({ app, setApp, go }) {
           <UnitsTable />
         )}
 
-        {/* Ecuación: "5 dag = [_ _] g" */}
+        {/* Ecuación: "5 dag = [_ _] g" — fila + cartel de respuesta correcta
+            apilados en columna, para que el cartel caiga DEBAJO y no invada la
+            columna de botones cuando la respuesta tiene muchas cifras. */}
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+        }}>
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
           flexWrap: "nowrap",
@@ -599,13 +604,16 @@ function GameScreen({ app, setApp, go }) {
             {problem.toUnit}
           </div>
 
+        </div>
+
           {/* Al fallar: los slots conservan lo que el niño escribió (en rojo)
-              y aquí aparece un cartel verde con la respuesta correcta. */}
+              y aquí aparece un cartel verde con la respuesta correcta, DEBAJO
+              de la ecuación (no inline) para no invadir la columna de botones. */}
           {reveal && reveal.correctSlot != null && (
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "8px 16px", borderRadius: 999,
-              background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+              background: "rgba(11,54,41,0.98)", border: "2px solid #2ecc8f",
               color: "#eafff4", fontSize: 18, fontWeight: 800,
               boxShadow: "0 0 16px rgba(46,204,143,0.5)",
               whiteSpace: "nowrap",

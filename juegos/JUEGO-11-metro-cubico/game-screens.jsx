@@ -604,7 +604,7 @@ function GameScreen({ app, setApp, go }) {
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 8,
               padding: "8px 16px", borderRadius: 999,
-              background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
+              background: "rgba(11,54,41,0.98)", border: "2px solid #2ecc8f",
               color: "#eafff4", fontSize: 18, fontWeight: 800,
               boxShadow: "0 0 16px rgba(46,204,143,0.5)",
               whiteSpace: "nowrap",

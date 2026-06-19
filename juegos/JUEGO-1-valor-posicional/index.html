@@ -959,24 +959,28 @@ const ENCOURAGEMENTS = [
 // Bloques de Dienes — barra (10 unidades apiladas) y cubito (1 unidad).
 // Definidos como componentes simples para mantener la coherencia visual
 // entre la bandeja de la derecha y los contenedores DECENAS / UNIDADES.
-function DienesBar({ color = "#f5a623", small = false }) {
+function DienesBar({ color = "#f5a623", small = false, ghost = false }) {
   const w = small ? 12 : 18;
   const cellH = small ? 5 : 10;
   return (
     <div style={{
-      width: w, height: cellH * 10, borderRadius: 4,
-      background: color,
-      boxShadow: `inset 0 0 0 1.5px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.4)`,
-      backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${cellH - 1}px, rgba(0,0,0,0.45) ${cellH - 1}px, rgba(0,0,0,0.45) ${cellH}px)`,
+      width: w, height: cellH * 10, borderRadius: 4, boxSizing: "border-box",
+      background: ghost ? "transparent" : color,
+      border: ghost ? `2px dashed ${color}` : "none",
+      opacity: ghost ? 0.7 : 1,
+      boxShadow: ghost ? "none" : `inset 0 0 0 1.5px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.4)`,
+      backgroundImage: ghost ? "none" : `repeating-linear-gradient(to bottom, transparent 0, transparent ${cellH - 1}px, rgba(0,0,0,0.45) ${cellH - 1}px, rgba(0,0,0,0.45) ${cellH}px)`,
     }} />
   );
 }
-function DienesCube({ color = "#4fa0ff" }) {
+function DienesCube({ color = "#4fa0ff", ghost = false }) {
   return (
     <div style={{
-      width: 22, height: 22, borderRadius: 4,
-      background: color,
-      boxShadow: `inset 0 0 0 1.5px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.4)`,
+      width: 22, height: 22, borderRadius: 4, boxSizing: "border-box",
+      background: ghost ? "transparent" : color,
+      border: ghost ? `2px dashed ${color}` : "none",
+      opacity: ghost ? 0.7 : 1,
+      boxShadow: ghost ? "none" : `inset 0 0 0 1.5px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.4)`,
     }} />
   );
 }
@@ -1402,9 +1406,17 @@ function GameScreen({ app, setApp, go }) {
         const baseTens = "#f5a623", baseUnits = "#4fa0ff";
         // Durante el revelado, lo que armó el niño se marca en rojo (input
         // equivocado) mientras un cartel verde muestra el número correcto.
-        const fbCol = reveal ? "#ff6b6b" : feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : null;
-        const TENS_BORDER = wrongDrop === "tens" ? "#ff6b6b" : (fbCol || baseTens);
-        const UNITS_BORDER = wrongDrop === "units" ? "#ff6b6b" : (fbCol || baseUnits);
+        // Descomposición canónica de la respuesta (única válida con los caps:
+        // unidades ≤ 9, así que las decenas son la parte alta). En el revelado
+        // se usa para pintar las piezas correctas dentro de cada columna.
+        const correctTens = Math.floor(problem.answer / 10);
+        const correctUnits = problem.answer % 10;
+        const tensOk = tens === correctTens;
+        const unitsOk = units === correctUnits;
+        const GREEN = "#2ecc8f", RED = "#ff6b6b";
+        const fbCol = feedback === "ok" ? GREEN : feedback === "err" ? RED : null;
+        const TENS_BORDER = wrongDrop === "tens" ? RED : reveal ? (tensOk ? GREEN : RED) : (fbCol || baseTens);
+        const UNITS_BORDER = wrongDrop === "units" ? RED : reveal ? (unitsOk ? GREEN : RED) : (fbCol || baseUnits);
         const TENS_GLOW = wrongDrop === "tens" || feedback || reveal ? `0 0 14px ${TENS_BORDER}66` : "none";
         const UNITS_GLOW = wrongDrop === "units" || feedback || reveal ? `0 0 14px ${UNITS_BORDER}66` : "none";
 
@@ -1435,7 +1447,7 @@ function GameScreen({ app, setApp, go }) {
                 abajo. */}
             <div style={{
               position: "absolute", top: 80, left: 240, right: 200,
-              textAlign: "center",
+              textAlign: "center", zIndex: 5,
             }}>
               <div style={{
                 fontFamily: "var(--ed-font-display)", fontWeight: 700,
@@ -1451,20 +1463,9 @@ function GameScreen({ app, setApp, go }) {
               }}>
                 {problem.answer}
               </div>
-              {/* Cartel verde con la respuesta correcta durante el revelado. */}
-              {reveal && reveal.correct != null && (
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  marginTop: 10, padding: "8px 18px", borderRadius: 999,
-                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
-                  color: "#eafff4", fontFamily: "var(--ed-font-display)",
-                  fontSize: 20, fontWeight: 800,
-                  boxShadow: "0 0 16px rgba(46,204,143,0.5)", whiteSpace: "nowrap",
-                }}>
-                  <span style={{ fontSize: 13, color: "#bff5df", letterSpacing: "0.03em" }}>Decenas y unidades correctas:</span>
-                  ✓ {Math.floor(reveal.correct / 10)}D {reveal.correct % 10}U
-                </div>
-              )}
+              {/* El revelado de la respuesta se muestra DENTRO de las columnas
+                  (piezas verdes = lo correcto, fantasma = lo que faltaba, rojo
+                  = lo que sobra), no como un cartel flotante. */}
             </div>
 
             {/* CONTENEDORES DECENAS / UNIDADES — bajan 20 px junto con la
@@ -1497,15 +1498,28 @@ function GameScreen({ app, setApp, go }) {
                   fontFamily: "var(--ed-font-display)", fontWeight: 700,
                   fontSize: 18, color: "#fff", lineHeight: 1,
                 }}>
-                  {tens} <span style={{ color: "rgba(246,241,255,0.55)", fontSize: 13 }}>· {tens * 10}</span>
+                  {reveal ? (
+                    <React.Fragment>
+                      <span style={{ color: tensOk ? GREEN : RED }}>{tens}</span>
+                      <span style={{ color: "rgba(246,241,255,0.6)", fontSize: 13 }}> / {correctTens}</span>
+                    </React.Fragment>
+                  ) : (
+                    <React.Fragment>{tens} <span style={{ color: "rgba(246,241,255,0.55)", fontSize: 13 }}>· {tens * 10}</span></React.Fragment>
+                  )}
                 </div>
                 <div style={{
                   display: "flex", alignItems: "flex-end", justifyContent: "center",
                   gap: 6, flex: 1, paddingTop: 2, minHeight: 100,
                 }}>
-                  {Array.from({ length: tens }).map((_, i) => (
-                    <DienesBar key={i} color={baseTens} />
-                  ))}
+                  {reveal
+                    ? Array.from({ length: Math.max(tens, correctTens) }).map((_, i) => (
+                        <DienesBar key={i}
+                          color={i < correctTens ? GREEN : RED}
+                          ghost={i >= tens && i < correctTens} />
+                      ))
+                    : Array.from({ length: tens }).map((_, i) => (
+                        <DienesBar key={i} color={baseTens} />
+                      ))}
                 </div>
               </div>
 
@@ -1531,15 +1545,28 @@ function GameScreen({ app, setApp, go }) {
                   fontFamily: "var(--ed-font-display)", fontWeight: 700,
                   fontSize: 18, color: "#fff", lineHeight: 1,
                 }}>
-                  {units} <span style={{ color: "rgba(246,241,255,0.55)", fontSize: 13 }}>· {units}</span>
+                  {reveal ? (
+                    <React.Fragment>
+                      <span style={{ color: unitsOk ? GREEN : RED }}>{units}</span>
+                      <span style={{ color: "rgba(246,241,255,0.6)", fontSize: 13 }}> / {correctUnits}</span>
+                    </React.Fragment>
+                  ) : (
+                    <React.Fragment>{units} <span style={{ color: "rgba(246,241,255,0.55)", fontSize: 13 }}>· {units}</span></React.Fragment>
+                  )}
                 </div>
                 <div style={{
                   display: "grid", gridTemplateColumns: "repeat(5, 22px)", gap: 5,
                   paddingTop: 4, minHeight: 100, alignContent: "end", justifyContent: "center",
                 }}>
-                  {Array.from({ length: units }).map((_, i) => (
-                    <DienesCube key={i} color={baseUnits} />
-                  ))}
+                  {reveal
+                    ? Array.from({ length: Math.max(units, correctUnits) }).map((_, i) => (
+                        <DienesCube key={i}
+                          color={i < correctUnits ? GREEN : RED}
+                          ghost={i >= units && i < correctUnits} />
+                      ))
+                    : Array.from({ length: units }).map((_, i) => (
+                        <DienesCube key={i} color={baseUnits} />
+                      ))}
                 </div>
               </div>
             </div>
@@ -1565,7 +1592,7 @@ function GameScreen({ app, setApp, go }) {
         // pegue al primer botón. SLOT_H=92 para llenar el aire vertical
         // disponible entre el cartel y el numpad. GROUP_GAP=10 mantiene la
         // lectura por grupos de millares.
-        const SLOT_W = 46, SLOT_H = 92, GAP = 3;
+        const SLOT_W = 46, SLOT_H = 140, GAP = 3;
         const GROUP_GAP = 10;
         return (
           <React.Fragment>
@@ -1574,7 +1601,7 @@ function GameScreen({ app, setApp, go }) {
                 tabs del HUD. Cartel un punto más grande para legibilidad. */}
             <div style={{
               position: "absolute", top: 80, left: 240, right: 200,
-              textAlign: "center",
+              textAlign: "center", zIndex: 5,
             }}>
               <div style={{
                 fontFamily: "var(--ed-font-display)", fontWeight: 700,
@@ -1594,21 +1621,9 @@ function GameScreen({ app, setApp, go }) {
               }}>
                 {numberToSpanish(problem.answer)}
               </div>
-              {/* Cartel verde con el número correcto durante el revelado.
-                  El input del niño se conserva (en rojo) en los slots. */}
-              {reveal && reveal.correct != null && (
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  marginTop: 10, padding: "8px 18px", borderRadius: 999,
-                  background: "rgba(46,204,143,0.22)", border: "2px solid #2ecc8f",
-                  color: "#eafff4", fontFamily: "var(--ed-font-display)",
-                  fontSize: 20, fontWeight: 800,
-                  boxShadow: "0 0 16px rgba(46,204,143,0.5)", whiteSpace: "nowrap",
-                }}>
-                  <span style={{ fontSize: 13, color: "#bff5df", letterSpacing: "0.03em" }}>Correcta:</span>
-                  ✓ {fmtThousands(reveal.correct)}
-                </div>
-              )}
+              {/* El revelado de la respuesta se muestra DENTRO de los slots:
+                  cada casillero pinta su dígito correcto en verde, con borde
+                  verde/rojo según si el niño acertó ese casillero. */}
             </div>
 
             {/* SLOTS del modo dígitos: top:265 — bajados ~30 px respecto del
@@ -1618,7 +1633,7 @@ function GameScreen({ app, setApp, go }) {
                 numpad en bottom:14). Centro vertical ~y=320, cerca de la
                 columna de botones (y=290). Slots de 92 px. */}
             <div style={{
-              position: "absolute", top: 265, left: 232, right: 200,
+              position: "absolute", top: 240, left: 232, right: 200,
               textAlign: "center",
             }}>
               {/* Etiquetas CMi DMi UMi · CM DM UM · C D U */}
@@ -1654,6 +1669,9 @@ function GameScreen({ app, setApp, go }) {
                     if (answer[k] === undefined || answer[k] === "") { activeIdx = k; break; }
                   }
                   const isActive = i === activeIdx;
+                  // Dígito correcto de este casillero (vacío si está deshabilitado).
+                  const correctDigit = disabled ? "" : String(problem.answer)[i - firstActive];
+                  const slotOk = !disabled && String(d) === correctDigit;
                   return (
                     <React.Fragment key={`S${i}`}>
                       {SLOT_GROUP_BREAK.has(i) && <div style={{ width: GROUP_GAP }} />}
@@ -1697,26 +1715,35 @@ function GameScreen({ app, setApp, go }) {
                         onClick={() => { if (filled && !disabled) eraseAtSlot(i); }}
                         title={disabled ? "Este casillero no se usa en este número" : (filled ? "Toca para borrar · arrastra para mover" : "Arrastra un número aquí")}
                         style={{
-                          width: SLOT_W, height: SLOT_H, fontSize: 42,
+                          width: SLOT_W, height: SLOT_H, fontSize: 50,
                           marginRight: i < SLOT_LABELS.length - 1 ? GAP : 0,
                           opacity: disabled ? 0.25 : 1,
                           pointerEvents: disabled ? "none" : "auto",
-                          // Durante el revelado el input del niño queda en rojo
-                          // (es la respuesta equivocada); el número correcto se
-                          // muestra en el cartel verde del cabezal.
-                          borderColor: reveal ? "#ff6b6b" : feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
+                          // Durante el revelado cada casillero muestra el dígito
+                          // CORRECTO en verde y, si el niño falló, debajo en rojo
+                          // y tachado lo que él había puesto. Borde verde/rojo.
+                          borderColor: reveal ? (slotOk ? "#2ecc8f" : "#ff6b6b") : feedback === "ok" ? "#2ecc8f" : feedback === "err" ? "#ff6b6b" : undefined,
                           boxShadow: reveal
-                            ? "0 0 18px rgba(255,107,107,0.65)"
+                            ? (slotOk ? "0 0 18px rgba(46,204,143,0.65)" : "0 0 18px rgba(255,107,107,0.65)")
                             : feedback === "ok"
                             ? "0 0 18px rgba(46,204,143,0.65)"
                             : feedback === "err"
                               ? "0 0 18px rgba(255,107,107,0.65)"
                               : undefined,
-                          color: "#fff",
+                          color: reveal && !disabled ? "#7CF5C0" : "#fff",
                           cursor: disabled ? "not-allowed" : (filled ? "grab" : "default"),
                         }}
                       >
-                        {disabled ? "—" : (filled ? d : "")}
+                        {disabled ? "—" : reveal ? (
+                          slotOk ? (
+                            <span style={{ color: "#7CF5C0" }}>{correctDigit}</span>
+                          ) : (
+                            <span style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", lineHeight: 1 }}>
+                              <span style={{ color: "#7CF5C0", fontWeight: 800 }}>{correctDigit}</span>
+                              <span style={{ fontSize: 16, color: "#ff8a8a", textDecoration: "line-through", marginTop: 3 }}>{filled ? d : "·"}</span>
+                            </span>
+                          )
+                        ) : (filled ? d : "")}
                       </div>
                     </React.Fragment>
                   );
