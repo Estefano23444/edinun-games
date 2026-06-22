@@ -1557,11 +1557,17 @@ function GameScreen({ app, setApp, go }) {
           {instructionText}
         </div>
 
-        {/* Contenido interactivo de cada ronda, centrado verticalmente. */}
+        {/* Contenido interactivo de cada ronda, centrado verticalmente.
+            En R1 (balanza) hay solo 2 bloques: con space-evenly quedaban
+            pegados a los extremos dejando un hueco enorme en medio. Para esa
+            ronda los agrupamos centrados con un gap fijo; el resto mantiene
+            space-evenly porque tienen más contenido. */}
         <div data-qa="zona-contenido" style={{
           flex: 1, width: "100%",
           display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "space-evenly",
+          alignItems: "center",
+          justifyContent: problem.idx === 0 ? "center" : "space-evenly",
+          gap: problem.idx === 0 ? 34 : 0,
         }}>
 
         {/* ────── R1: Balanza binaria ────── */}
@@ -1571,7 +1577,7 @@ function GameScreen({ app, setApp, go }) {
           // CSS rotate(-N): el extremo IZQUIERDO baja (counter-clockwise).
           // Se inclina tanto al resolver (feedback) como al revelar la correcta.
           const tilt = (feedback !== null || reveal !== null)
-            ? (problem.outcome === "left" ? -7 : problem.outcome === "right" ? 7 : 0)
+            ? (problem.outcome === "left" ? -6 : problem.outcome === "right" ? 6 : 0)
             : 0;
           const locked = feedback !== null || reveal !== null;
 
@@ -1590,8 +1596,8 @@ function GameScreen({ app, setApp, go }) {
               {/* Cup superior (label valor) */}
               <div style={{
                 position: "relative",
-                padding: "12px 20px",
-                minWidth: 130,
+                padding: "12px 18px",
+                minWidth: 116,
                 background: "linear-gradient(180deg, #fce9a8 0%, #d9a441 60%, #8a5a20 100%)",
                 borderTopLeftRadius: 14,
                 borderTopRightRadius: 14,
@@ -1612,10 +1618,11 @@ function GameScreen({ app, setApp, go }) {
 
           return (
             <>
-              {/* Contenedor de balanza con altura fija para evitar overlap */}
+              {/* Contenedor de balanza con altura fija para evitar overlap
+                  (recortado: el gráfico solo ocupa ~135px, antes sobraban ~65). */}
               <div style={{
                 position: "relative",
-                width: 480, height: 200,
+                width: 480, height: 140,
                 display: "flex", alignItems: "flex-start", justifyContent: "center",
               }}>
                 {/* Beam giratorio + platillos (rotan juntos desde el centro) */}
@@ -1624,7 +1631,7 @@ function GameScreen({ app, setApp, go }) {
                   transform: `translateX(-50%) rotate(${tilt}deg)`,
                   transformOrigin: "center center",
                   transition: "transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                  width: 320, height: 10,
+                  width: 270, height: 10,
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
                   {/* Beam horizontal con gradiente metálico */}
@@ -1707,8 +1714,8 @@ function GameScreen({ app, setApp, go }) {
                   position: "absolute", top: 30, left: "50%",
                   transform: "translateX(-50%)",
                   width: 0, height: 0,
-                  borderLeft: "22px solid transparent",
-                  borderRight: "22px solid transparent",
+                  borderLeft: "16px solid transparent",
+                  borderRight: "16px solid transparent",
                   borderBottom: "38px solid #d9a441",
                   filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.55))",
                 }} />
@@ -1717,15 +1724,15 @@ function GameScreen({ app, setApp, go }) {
                   position: "absolute", top: 40, left: "50%",
                   transform: "translateX(-50%)",
                   width: 0, height: 0,
-                  borderLeft: "10px solid transparent",
-                  borderRight: "10px solid transparent",
+                  borderLeft: "7px solid transparent",
+                  borderRight: "7px solid transparent",
                   borderBottom: "18px solid rgba(252,233,168,0.55)",
                 }} />
                 {/* Base inferior */}
                 <div style={{
                   position: "absolute", top: 72, left: "50%",
                   transform: "translateX(-50%)",
-                  width: 130, height: 8, borderRadius: 4,
+                  width: 86, height: 8, borderRadius: 4,
                   background: "linear-gradient(180deg, #d9a441 0%, #8a5a20 70%, #4d2900 100%)",
                   border: "1.5px solid #4d2900",
                   boxShadow: "0 6px 14px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25)",
